@@ -1,6 +1,6 @@
 # Workout Prescription Ontology
 
-A foundational reference for the workout prescription protocol. Defines concepts from first principles so that the logic layer has something precise to reason over. The protocol (`WORKOUT_PROTOCOL.md`) builds on top of this; where the two conflict, this document takes precedence on definitions.
+A foundational reference for workout prescription. Defines concepts from first principles so that the reasoning layer has something precise to reason over. This is the single grounding document for workout creation. The prescription layer that builds on it — the workout builder (`workout-builder.js`) and the LLM coach that selects and sequences sessions — turns these definitions into platform-specific prescriptions. Where they conflict, this document takes precedence on definitions.
 
 ---
 
@@ -8,14 +8,14 @@ A foundational reference for the workout prescription protocol. Defines concepts
 
 This document is the **ontology and grounding logic** layer. It defines the concepts, the physiology, the progression rules, and the decision thresholds the reasoning layer operates on. It is consumed by an LLM that produces actual prescriptions. It is not itself the prescription builder.
 
-A note on naming: this file currently carries the filename `WORKOUT_PROTOCOL.md` while its title and role are the ontology, and it refers above to a separate `WORKOUT_PROTOCOL.md` that builds on top of it. That is a collision worth resolving in the system — the ontology and the protocol should not share a filename. Throughout this document, "this document" means the ontology; "the protocol" means the layer above it that turns these definitions into platform-specific prescriptions.
+A note on layers: this is the single grounding document for workout creation — the ontology. It does not itself build prescriptions. The prescription layer that consumes it is the workout builder (`workout-builder.js`, which renders the Intervals workout DSL and estimates load) together with the LLM coach that selects and sequences sessions. Throughout this document, "this document" or "the ontology" means the grounding logic; "the prescription layer" or "the builder" means that consuming layer. There is no separate protocol document — this file replaced the earlier `WORKOUT_PROTOCOL.md`.
 
 **What the system has access to.** The reasoning layer can read:
 - The athlete's current power profile (FTP and the power curve across key durations), exposed by the system.
 - Recent training activities and current load (CTL/ATL/TSB and per-activity files), via intervals.icu.
-- A daily readiness signal — a Go/No-Go message derived from subjective scores and trending health data (HRV, resting HR, sleep, wellness), produced by a separate daily layer that runs before any prescription.
+- A daily readiness signal: Section 11's Readiness Decision (a go / modify / skip verdict on the P0 to P3 ladder), derived from subjective scores and trending health data (HRV, resting HR, sleep, wellness), produced by a separate daily layer that runs before any prescription. See *Relationship to Section 11* below.
 
-**The division of labour with the Go/No-Go layer.** This document describes how to build sessions and sequence blocks, and how to read what a completed session means. It does not compute daily readiness — that is the Go/No-Go layer's job. When the daily signal says No-Go or Caution, that decision overrides the planned prescription: the planned session is deferred, swapped for recovery, or reduced, regardless of where the ladder would otherwise step. The maladaptation and readiness material in sections 3.4 and 4.3 informs how the system interprets trends and session outcomes; it does not duplicate or override the daily gate.
+**The division of labour with the readiness layer.** This document describes how to build sessions and sequence blocks, and how to read what a completed session means. It does not compute daily readiness; that is the readiness layer's job (Section 11's Readiness Decision). When the daily verdict is skip or modify, that decision overrides the planned prescription: the planned session is deferred, swapped for recovery, or reduced, regardless of where the ladder would otherwise step. The maladaptation and readiness material in sections 3.4 and 4.3 informs how the system interprets trends and session outcomes; it does not duplicate or override the daily gate.
 
 **Two modes of use.** The system uses this document in one of two modes:
 1. **Single session.** Given a known limiter and the current readiness signal, prescribe one appropriate session today. The limiter-removal vs blade-sharpening logic in the preamble, the zone and stimulus mapping in Layer 2, and the ladder state in Layer 4 together determine what that session should be.
@@ -26,6 +26,66 @@ A note on naming: this file currently carries the filename `WORKOUT_PROTOCOL.md`
 - **Off-bike strength and conditioning.** Programmed separately by the athlete. The system treats neuromuscular *on-bike* work within its framework but does not prescribe gym work, and should account for separately-programmed strength load only insofar as it appears in the readiness signal and recent-fatigue picture.
 
 These exclusions are choices, not oversights. The system should not attempt to fill them and should not apologise for their absence.
+
+---
+
+## Relationship to Section 11
+
+This document is one of two grounding documents. **Section 11** (`SECTION_11.md`) is the other. Section 11 owns how training *data is interpreted*: load metrics (ACWR, CTL/ATL/TSB), readiness, training-intensity distribution, durability, and validation. This document owns how *sessions are prescribed and progressed*. The two are designed to dovetail, and one rule resolves every place they touch the same concept:
+
+> **Measurement and readiness definitions follow Section 11. Prescription and progression definitions follow this document.**
+
+The specifics below apply that rule.
+
+### Zone numbering: two systems, deliberately
+
+This document uses granular **Z1 to Z7** (the Coggan-style power zones defined in Layer 2). Section 11's intensity-distribution, polarisation, and phase-detection logic use **Seiler three-zone** aggregates that reuse `Z1/Z2/Z3` for the rolled-up bands. The symbols do not line up:
+
+| Symbol | This document (granular zone) | Section 11 (Seiler aggregate) |
+|---|---|---|
+| `Z1` | Recovery, below 55% FTP | **Easy**: granular Z1 to Z2, below LT1 |
+| `Z2` | **Endurance**, 55 to 75%, the foundation to maximise | **Grey zone**: granular Z3, LT1 to LT2, the band to minimise |
+| `Z3` | Tempo, 76 to 87% | **Hard / quality**: granular Z4 to Z7, above LT2 |
+
+So `Z2` means *endurance* here but the *grey zone* in Section 11, and `Z3` means *tempo* here but *hard* there, with opposite prescriptive valence in each case. Within this document, `Zn` is always the granular zone. When invoking Section 11's distribution buckets, name them "Seiler easy / grey / hard" rather than by number. (Section 11's rollup also treats the granular Z3/Z4 boundary as its LT2 line, where this document places LT2 near FTP at the top of Z4; read Section 11's "hard" bucket as "threshold and above".)
+
+### Daily readiness: Section 11 owns the vocabulary
+
+This document does not compute readiness. It defers to Section 11's **Readiness Decision**, whose canonical output is **go / modify / skip** on the **P0 to P3** priority ladder. Earlier drafts of this document used "Go / Caution / No-Go"; that vocabulary is retired in favour of Section 11's. The mapping:
+
+| Readiness state | Section 11 verdict | Effect on the prescription |
+|---|---|---|
+| P0, blocked (medical/safety) | skip | No session; the ladder does not move |
+| P1, caution | modify | Session reduced or swapped for recovery; the ladder holds |
+| P2, normal | go | Prescribe as planned |
+| P3, high | go (with quality) | Prescribe as planned; a quality stimulus is well supported |
+
+A skip or modify verdict overrides where the ladder would otherwise step.
+
+### Progression: this document owns the mechanism
+
+The Layer 4 ladder is **how a session's difficulty is delivered to the athlete**, and it is the progression mechanic the system uses in place of Section 11's "Progression Pathways". But the *axis* of a rung — whether it adds power or adds duration — is not fixed. It is set by the **specificity of the athlete's target event**, applying the extensive-versus-intensive logic in section 1.7:
+
+- **Power-demand events** (short, sharp, repeated-surge racing: criterium, cyclocross, road races decided by accelerations) lean toward **intensive progression** — raising power at a held duration — for the systems the event taxes (VO2max, anaerobic, neuromuscular). For these, Section 11's "prioritise power progression, not duration" is the right call.
+- **Duration-demand events** (sustained efforts: time trial, gran fondo, long road or gravel) lean toward **extensive progression** — extending time-in-zone at a held intensity.
+
+Most blocks still build extensively first regardless of event, because duration at the current ceiling is the base that intensive work later draws on (section 1.7) and it carries a lower recovery cost. Intensive progression is then layered in as the event's power demands and the athlete's accumulated base justify it. The ladder records the chosen mode per system (section 4.5); which axis a given system progresses on is a coaching decision driven by race demand and phase, not a global default.
+
+Section 11's readiness and compliance signals (RI, HRV, DI, interval compliance, HR-drift, ACWR) act as **gates on advancement** — whether a rung is earned or held — regardless of which axis that rung uses. The axis is this document's to choose; the gate draws on Section 11's signals and the daily readiness verdict.
+
+### Durability: Section 11 owns the metric
+
+This document treats durability conceptually as the fatigued power curve (section 1.7). Its operational measurement is Section 11's: the **Durability Index** (average power, last hour divided by first hour) and **aggregate durability** (mean decoupling on qualifying steady sessions of 90 minutes or longer). The "best 5-minute power after 2000 kJ" phrasing in section 1.7 is the concept; DI and aggregate durability are the measured signals.
+
+### Subjective inputs: Section 11 and intervals.icu definitions
+
+The subjective signals this document reasons over come from intervals.icu and follow Section 11's scales:
+
+- **RPE**: 1 to 10 (as used throughout Layer 1.5 and the feedback layer).
+- **Feel**: intervals.icu's inverted 1 to 5 scale (1 = Strong, 5 = Weak).
+- **Subjective wellness** (mood, motivation, fatigue, soreness, stress, sleep quality, and the rest): inverted 1 to 4 (1 = best, 4 = worst).
+
+Where this document says "RPE relative to expected," it means the 1 to 10 RPE read in these terms.
 
 ---
 
@@ -401,11 +461,11 @@ The fresh power curve describes what the athlete can do rested. It says little a
 
 This is a second diagnostic dimension sitting alongside the fresh curve, and intervals.icu exposes the data to measure it. Two athletes with identical fresh curves can have very different fatigued curves, and the one whose curve collapses late is the one who loses races in the final hour despite matching fitness on paper. Durability is trainable — primarily through aerobic base volume and through deliberately placing quality work on pre-fatigued legs (the fatigue resistance exception in section 2.4).
 
-For prescription purposes, durability is read as a limiter in its own right: a curve that holds fresh but decays sharply when fatigued points to extensive aerobic work and fatigue-resistance sessions, regardless of where the fresh curve sits. The fresh curve sets the ceiling; the fatigued curve sets how much of that ceiling survives to the part of the race that matters.
+For prescription purposes, durability is read as a limiter in its own right: a curve that holds fresh but decays sharply when fatigued points to extensive aerobic work and fatigue-resistance sessions, regardless of where the fresh curve sits. The fresh curve sets the ceiling; the fatigued curve sets how much of that ceiling survives to the part of the race that matters. Its operational measurement belongs to Section 11: the Durability Index (average power, last hour divided by first hour) and aggregate durability (mean decoupling on long steady sessions). The "5-minute power after 2000 kJ" framing here is the concept, not the metric the data layer computes — see *Relationship to Section 11*.
 
 #### Progression Mode as a Ladder Property
 
-Each ladder in this system carries a progression mode — extensive or intensive — as a property. The mode determines whether advancing a rung means longer efforts at the same intensity or harder efforts of the same duration. This is set at the phase level: base and build phases favour extensive; peak phase may shift selected ladders to intensive. The mode is explicit, never assumed.
+Each ladder in this system carries a progression mode — extensive or intensive — as a property. The mode determines whether advancing a rung means longer efforts at the same intensity or harder efforts of the same duration. It is set by target-event demand and training phase together: base and build phases favour extensive and peak phase may shift selected ladders to intensive, but an event whose demands are dominated by short, sharp power (criterium, cyclocross) pulls the systems it taxes toward intensive earlier than a duration-dominated event (time trial, long road or gravel) would. The mode is explicit, never assumed.
 
 ---
 
@@ -849,7 +909,7 @@ The adaptation process follows a predictable pattern known as supercompensation:
 
 **A note on what this model is and is not.** Supercompensation is a teaching model — a clean single-curve story that makes the timing intuition vivid and is genuinely useful for explaining why recovery is part of the prescription. It is not how the system reasons quantitatively, and it should not be taken literally. The discrete "peak" cannot be reliably detected in an individual on any given day, and real adaptation does not follow one tidy curve per session — it is the summed response to weeks of overlapping stimulus and recovery. The model the system actually runs on is the fitness-fatigue (impulse-response) model that underpins the performance management chart: every load simultaneously adds to a slow-decaying fitness trace (CTL) and a fast-decaying fatigue trace (ATL), and readiness is the gap between them (TSB). This is the more defensible framework and it is the one already endorsed in section 1.4. Where the two models appear to conflict, fitness-fatigue governs the system's decisions; supercompensation survives only as the metaphor used to explain those decisions to the athlete.
 
-The practical goal is the same under either lens: apply the next quality stimulus when the body has absorbed the last one and is trending toward readiness, rather than while still in deficit or long after the adaptation window has closed. The daily Go/No-Go layer — built from subjective scores and trending health data — is the system's real-world proxy for "is the body ready for the next stimulus," and it does the job the idealised supercompensation peak only gestures at.
+The practical goal is the same under either lens: apply the next quality stimulus when the body has absorbed the last one and is trending toward readiness, rather than while still in deficit or long after the adaptation window has closed. The daily readiness layer — built from subjective scores and trending health data — is the system's real-world proxy for "is the body ready for the next stimulus," and it does the job the idealised supercompensation peak only gestures at.
 
 #### The Timing Errors
 
@@ -1436,7 +1496,7 @@ This is a single concrete trace through the system, from profile to prescription
 
 **Phase and mode.** Nine weeks out, the athlete is in a build phase shifting toward peak. VO2max is the dominant system to develop. The VO2max ladder is active at level 4.2.
 
-**Today's prescription (single-session mode).** The daily Go/No-Go layer returns Go — subjective scores good, HRV and resting HR stable, no accumulated red flags. At level 4.2 the athlete is in the foundational-development band and traditional 5×5 is not yet appropriate. The ladder routes through the micro-burst bridge (section 2.2): an on-offs session at Z5. Prescription: warm-up, settle, then 3 sets of 9 minutes of 30s on / 15s off, work intervals targeting Z5 (≈105–115% FTP, so 294–322W), 5 minutes easy between sets, cool-down. Expected work RPE for Z5: 8–9.
+**Today's prescription (single-session mode).** The daily readiness layer returns go — subjective scores good, HRV and resting HR stable, no accumulated red flags. At level 4.2 the athlete is in the foundational-development band and traditional 5×5 is not yet appropriate. The ladder routes through the micro-burst bridge (section 2.2): an on-offs session at Z5. Prescription: warm-up, settle, then 3 sets of 9 minutes of 30s on / 15s off, work intervals targeting Z5 (≈105–115% FTP, so 294–322W), 5 minutes easy between sets, cool-down. Expected work RPE for Z5: 8–9.
 
 **The result.** The athlete completes all three sets. File analysis (section 2.3 scoring):
 - All work intervals average within the 294–322W band. No interval drifts below the lower edge for a sustained stretch. → all intervals pass.
@@ -1458,7 +1518,7 @@ This is a single concrete trace through the system, from profile to prescription
 
 All contributing weights sit at or above the 0.05 noise floor, so all carry through. The VO2max ladder advances to 4.4; threshold, aerobic base, and anaerobic accrue small secondary gains that accumulate across the block. The signature profile updates as a whole.
 
-**What the system does next.** With a Go signal and a clean +0.2, the next VO2max session steps to level 4.4 — slightly longer work intervals or a marginally tighter work:rest ratio, per the micro-burst progression toward 40/20 and eventually traditional intervals. The block continues raising the roof so the athlete's threshold has room to follow, and the durability and skill layers are slotted in around the quality work as the readiness signal permits. Had the RPE come back at 9.5 instead, the same completed session would have scored at-the-limit (+0.0) and the system would have held 4.2 to consolidate rather than advanced.
+**What the system does next.** With a go verdict and a clean +0.2, the next VO2max session steps to level 4.4 — slightly longer work intervals or a marginally tighter work:rest ratio, per the micro-burst progression toward 40/20 and eventually traditional intervals. The block continues raising the roof so the athlete's threshold has room to follow, and the durability and skill layers are slotted in around the quality work as the readiness signal permits. Had the RPE come back at 9.5 instead, the same completed session would have scored at-the-limit (+0.0) and the system would have held 4.2 to consolidate rather than advanced.
 
 ---
 
@@ -1517,3 +1577,5 @@ The framework exists to make good decisions consistently and transparently. It i
   - Durability / fatigued power curve added as a second diagnostic dimension (section 1.7) and to the signature profile (section 4.2).
   - Worked end-to-end example appended.
   - Sweet spot's presence in the zone-keyed weight matrix clarified.
+- v0.29 — Naming and layer reconciliation: file renamed `WORKOUT_PROTOCOL.md` → `PROCESS_W.md` and reframed as the single grounding document for workout creation. The earlier ontology-vs-protocol filename collision is resolved — there is no separate protocol document. The prescription layer that consumes this ontology is named explicitly: the workout builder (`workout-builder.js`) plus the LLM coach. Cross-references across the repo doc set updated to point here.
+- v0.30 — *Relationship to Section 11* section added, establishing the ownership boundary between the two grounding documents: measurement and readiness definitions follow Section 11, prescription and progression follow this document. Resolves the granular Z1–Z7 vs Seiler Z1/Z2/Z3 numbering collision (crosswalk table); retires the old Go/Caution/No-Go readiness wording in favour of Section 11's go/modify/skip + P0–P3 (mapping table), and reconciled the five in-body uses to match; states that this document's ladder is the progression mechanic in place of Section 11's Progression Pathways, with the progression axis (power vs duration) set by target-event specificity per section 1.7 — power-demand events (crit, cyclocross, surge racing) lean intensive, duration-demand events (time trial, long road/gravel) lean extensive, most blocks still build extensively first — and Section 11's signals acting as advancement gates not the axis; defers durability metrics to Section 11's DI + aggregate durability (section 1.7 pointer added); pins the subjective-input scales (RPE 1–10, Feel inverted 1–5, wellness inverted 1–4) to Section 11 / intervals.icu.

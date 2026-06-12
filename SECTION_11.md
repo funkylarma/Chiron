@@ -4,6 +4,8 @@
 **Last Updated:** 2026-04-30
 **License:** [MIT](https://opensource.org/licenses/MIT)
 
+> **Local adaptation (intervals-icu-mcp fork, 2026-06-12).** This is a project-local copy of Section 11, not the upstream document. Two reframes match it to this deployment: (1) the upstream Python sync (`sync.py`/`pull.py` and its `v3.x` version pins) is reframed onto this project's sync layer — Node `src/sync/` locally plus the Cloudflare Worker cron; (2) the `DOSSIER.md` athlete-store concept is reframed onto live intervals.icu (FTP/zones/LTHR/schedule) plus goals agreed with the athlete at the outset, the `dossier_declared`/`dossier_agreement` schema fields are renamed `declared_phase`/`phase_agreement`, and data-mirror access is reframed to this MCP server. Companion grounding doc: `PROCESS_W.md` (see its *Relationship to Section 11* for the ownership boundary). The upstream version history below is preserved as-is.
+
 ### Changelog
 
 **v11.43 — Body Weight Handling (block W/kg + weekly trend):**
@@ -15,60 +17,60 @@
 - Weekly report: new conditional "Weight Trend" section, dormant on low density (e.g. <4 weigh-ins in trailing 7d)
 - Pre-workout and post-workout report templates intentionally untouched in v1
 - Deliberately deferred: target weight/date/rate config, hunger / cravings fields, daily-swing triggers, indoor / outdoor split, hydration correction, "fueling protected" inference. See the new Body Weight Handling section for the v1 boundary
-- Pairs with `sync.py` v3.112
+- Pairs with a sync-layer change
 
 **v11.42 — Season Report v2 prerequisites land:**
-- Two items parked in v11.41 now ship via `sync.py` v3.110: weekly capability rollup on `weekly_180d[*]` (durability/EF/HRRc means + qualifying counts) and monthly `dominant_phase` alignment with `_detect_phase_v2` via modal aggregation of overlapping weekly rows
+- Two items parked in v11.41 now ship via a sync-layer change: weekly capability rollup on `weekly_180d[*]` (durability/EF/HRRc means + qualifying counts) and monthly `dominant_phase` alignment with `_detect_phase_v2` via modal aggregation of overlapping weekly rows
 - Schema tables for `weekly_180d` and `monthly_*y` rows added to the History Data Mirror section
 - `or`-chain → is-None cleanup at four extraction sites (`_calculate_durability` decoupling fallback, `_calculate_hrrc_trend` qualifying filter, weekly capability rollup HRRc dict-extract, activity formatter `raw_hrrc`) — exact-zero values are now treated as authoritative rather than falling through to a sibling key
-- `examples/reports/SEASON_REPORT_TEMPLATE.md` Notes section: phase bullet and capability bullet rewritten to describe shipped v3.110 behavior
-- Pairs with `sync.py` v3.110
+- `examples/reports/SEASON_REPORT_TEMPLATE.md` Notes section: phase bullet and capability bullet rewritten to describe shipped behavior
+- Pairs with a sync-layer change
 
 **v11.41 — Season Report Tier:**
 - New report tier above Block: trailing-12-month annual arc with current-season trajectory and year-over-year metrics comparison. Length norm 55–70 lines, on-demand only (no automatic cadence). Sits at the top of the existing Pre → Post → Weekly → Block hierarchy
 - v1 is descriptive only. Goal audit is intentionally deferred to v2 — no placeholder section, no header
 - Phase narrative is scoped to ≤180d. All phase references draw from `weekly_180d[*].phase_detected` or `derived_metrics.phase_detection`. The YoY section is **metrics-only**: no phase labels for prior years. `monthly_*y[*].dominant_phase` is derived via modal aggregation of `weekly_180d[*].phase_detected` values whose week span overlaps the month; TSS is used only as tie-break — same vocabulary as `_detect_phase_v2`. Null when no overlapping weekly rows exist (month outside the 180d window)
-- Capability metrics (durability, EF, HRRc) are available per week in `weekly_180d[*]` as trajectory fields (v3.110). Each week carries `durability_mean`, `durability_qualifying`, `ef_mean`, `ef_qualifying`, `hrrc_mean`, `hrrc_qualifying`. Gating mirrors `derived_metrics.capability` (VI≤1.05, VI>0, mt≥5400 for durability; cycling types + VI≤1.05 + mt≥1200 for EF; icu_hrr>0 for HRRc). N≥1 emits a mean; qualifying count governs render confidence. Sustainability and DFA a1 remain present-moment only in `derived_metrics.capability`
+- Capability metrics (durability, EF, HRRc) are available per week in `weekly_180d[*]` as trajectory fields. Each week carries `durability_mean`, `durability_qualifying`, `ef_mean`, `ef_qualifying`, `hrrc_mean`, `hrrc_qualifying`. Gating mirrors `derived_metrics.capability` (VI≤1.05, VI>0, mt≥5400 for durability; cycling types + VI≤1.05 + mt≥1200 for EF; icu_hrr>0 for HRRc). N≥1 emits a mean; qualifying count governs render confidence. Sustainability and DFA a1 remain present-moment only in `derived_metrics.capability`
 - YoY rule: match by calendar `month` string across the union of `monthly_1y`, `monthly_2y`, `monthly_3y` (these are rolling-trailing arrays, not year-bucketed). If matched month not present, render `n/a — no prior data`. Default is current-vs-last-year only; 2y/3y lines surface only when delta is material (≥15% hours/TSS, ≥3 CTL points, ≥5pp TID)
 - Span: trailing 12 months ending at `metadata.last_updated` (or `history.generated_at` when reading `history.json` directly)
-- No `sync.py` changes needed for Season Report v1. Report consumes existing JSON only. Pairs with `sync.py` v3.110
+- No sync-layer change needed for Season Report v1. Report consumes existing JSON only. Pairs with a sync-layer change
 - New files: `examples/reports/SEASON_REPORT_TEMPLATE.md`, `examples/reports/SEASON_REPORT_EXAMPLES.md`. Updated: `examples/reports/REPORT_HIERARCHY.md` (table, flow diagram, capability scaling rule, files list)
 
 **v11.40 — Display Unit Semantics:**
 - New "Display Unit Semantics" subsection in the Data Mirror block. Establishes a three-layer signal: (1) `athlete_profile.display_preferences` — six-key map of athlete's Intervals.icu unit choices, (2) per-record `display.*` blocks with display-ready `{value, unit}` pairs converted from canonical metric, (3) per-activity `*_unit` siblings + `weather_summary.units` for fields the API already returns in account units (left as-is for backward compatibility)
 - AI rules: quote `display.*` for any user-facing prose involving distance / elevation / weight / height / position / speed; use canonical metric (`*_km`, `*_m`, `*_kg`) for calculations only; cross-record arithmetic stays in canonical and display-converts the result at narration; W/kg / kJ / IF / % / heat-protocol °C calibration are universal physics units, pref-independent
 - Sustainability profile `weight_kg` deliberately stays canonical-only (calculation input for W/kg, never narrated as a weight value)
-- Heat-protocol °C thresholds are canonical scientific units. AI quotes them as °C regardless of athlete preference; no inline °C → °F conversion at narration time. Future sync.py may emit a display-converted threshold block; until then, °C is the reference
+- Heat-protocol °C thresholds are canonical scientific units. AI quotes them as °C regardless of athlete preference; no inline °C → °F conversion at narration time. A future sync-layer revision may emit a display-converted threshold block; until then, °C is the reference
 - Resolves the `avg_speed_unit`/`max_speed_unit` always-KPH asymmetry documented earlier — narration now reads from `display.avg_speed`/`display.max_speed` which honor the athlete's distance preference; the original sibling fields remain for backward compatibility
-- Pairs with `sync.py` v3.110. Sites: `athlete_profile.display.height`, `current_status.current_metrics.display.weight`, `recent_activities[].display.{distance, elevation, avg_speed, max_speed}`, `terrain_summary.display.{total_distance, total_elevation, elevation_per_distance}` + `climbs[]/descents[].display.{position, distance, elevation}` (recent_activities and routes.json), `summary.by_activity_type[].display.distance`, `wellness_data[].display.weight`, history.json `daily_90d/weekly_180d[].display.weight`, `monthly_*y[].display.avg_weight` (aggregate naming preserved), `race_calendar.all_races[].display.distance`
+- Pairs with a sync-layer change. Sites: `athlete_profile.display.height`, `current_status.current_metrics.display.weight`, `recent_activities[].display.{distance, elevation, avg_speed, max_speed}`, `terrain_summary.display.{total_distance, total_elevation, elevation_per_distance}` + `climbs[]/descents[].display.{position, distance, elevation}` (recent_activities and routes.json), `summary.by_activity_type[].display.distance`, `wellness_data[].display.weight`, history.json `daily_90d/weekly_180d[].display.weight`, `monthly_*y[].display.avg_weight` (aggregate naming preserved), `race_calendar.all_races[].display.distance`
 - All display sub-objects use a single nested shape (`display.*`) — no `*_display` sibling form. One AI rule, one schema shape across every emission site
 - Pre-workout report Weather line de-metric'd: hardcoded `°C` and `m/s` labels replaced by `weather_summary.units.{temp, wind}` references so imperial athletes see °F and MPH/MPS/KPH per their account
 - Templates updated with directive line + de-metric'd placeholders. Examples remain metric (Daniel's account is metric); imperial coverage relies on per-pref display blocks rather than parallel example sets
 
 **v11.39 — Outdoor Context Synthesis Line:**
 - New `Outdoor context:` line at the top of each outdoor activity block in post-workout reports. Single optional line synthesizing terrain + weather and, when earned, a causal clause attributing observed variability or environmental cost
-- Reuses inputs already present from v11.38 (`course_character`, `elevation_per_km`, `max_grade_pct`, `avg_feels_like`, `avg_wind_speed`, `headwind_pct`, `rain`, `variability_index`). No `sync.py` changes — interpretation layer only
+- Reuses inputs already present from v11.38 (`course_character`, `elevation_per_km`, `max_grade_pct`, `avg_feels_like`, `avg_wind_speed`, `headwind_pct`, `rain`, `variability_index`). No sync-layer change — interpretation layer only
 - Causal-clause triggers reuse this section's existing salience thresholds. Four triggers: variability terrain-driven (cycling + VI ≥ 1.05 + non-flat terrain), headwind meaningful (`headwind_pct ≥ 30` AND `avg_wind_speed ≥ 3` — both gates required, low-magnitude wind makes headwind percentage irrelevant), thermal cost notable (`avg_feels_like` outside [5, 25]), wet conditions (`rain > 0`). When no trigger fires, clause is omitted entirely
 - Max two clauses chained with comma. When more than two qualify, judgment selects the most acute on the day — consistent with the section's "anchors not gates, apply judgment" framing
 - Graceful degrade across four states (both summaries / terrain only / weather only / neither). Indoor activities and status-only states omit the line entirely; absence of the line is the correct signal
 - Bands describe the environment as recorded; sport-specific interpretation (heat tiers, cold warm-up rules) remains the responsibility of the Environmental Conditions Protocol, unchanged
 - Three example blocks updated in `POST_WORKOUT_REPORT_EXAMPLES.md` (Examples 2, 6, 8) demonstrating three patterns: variability-terrain-driven, variability-terrain-driven with separate fueling narrative, and thermal cost on flat terrain. Example 2 interpretation deduped — "due to terrain variability" dropped now that the synthesis line attributes it
-- No sync.py change required
+- No sync-layer change required
 
 **v11.38 — Completed-Activity Terrain & Weather:**
 - `terrain_summary` and `weather_summary` blocks now embedded on outdoor activities in `recent_activities[]` (types: Ride, MountainBikeRide, GravelRide, EBikeRide, Run, TrailRun, NordicSki, Walk, Hike). Indoor activities have no field (type is the indoor signal).
 - State semantics for terrain: `terrain_summary` present (success), `terrain_status: "no_gps" | "no_elevation" | "failed"` (terminal non-success), or no field (indoor / not yet processed / transient retry pending). Weather: `weather_summary` present, `weather_status: "unavailable"` (re-evaluated each sync), or no field (indoor).
-- New activity-level fields beyond the routes.json shape: `max_grade_pct` (steepest 200m chunk anywhere on the route, not just inside detected climbs), `grade_distribution` (flat/gentle/moderate/steep percent buckets), `start_coords`. No polyline (raw streams available on demand via pull.py).
+- New activity-level fields beyond the routes.json shape: `max_grade_pct` (steepest 200m chunk anywhere on the route, not just inside detected climbs), `grade_distribution` (flat/gentle/moderate/steep percent buckets), `start_coords`. No polyline (raw streams available on demand via the streams API).
 - Weather summary uses stable keys with explicit `units` block ({wind, temp, rain}) so values stay account-unit-agnostic. AI must read units from the block, not assume metric.
 - Documented inside the existing Route & Terrain Protocol — same vocabulary as planned-route briefings, retrospectively applied. Post-workout interpretation is the primary consumer; weekly/block review secondary.
-- Requires sync.py v3.107
+- Requires a sync-layer change
 
 **v11.37 — has_intervals Semantics Fix:**
 - `has_intervals` now requires at least one `type == "WORK"` segment in the intervals.json entry — previously any non-empty segment list set the flag true
-- Pre-existing bug dating to v3.101 narrowing: Intervals.icu emits a single whole-session `RECOVERY` placeholder on unstructured endurance rides, which the prior check treated as structured. Live evidence from the v3.105 test run: 9 false positives (SkiErg, virtual endurance) vs 3 true RECOVERY,WORK activities across 62 sessions
-- v3.101 intent ("narrowed to structured segments only") now actually enforced at the check level. Descriptive docs already reflected the intended behavior — no consumer semantics change, only the implementation catching up
+- Pre-existing bug dating to the earlier narrowing: Intervals.icu emits a single whole-session `RECOVERY` placeholder on unstructured endurance rides, which the prior check treated as structured. Live evidence from the test run: 9 false positives (SkiErg, virtual endurance) vs 3 true RECOVERY,WORK activities across 62 sessions
+- The earlier narrowing intent ("narrowed to structured segments only") now actually enforced at the check level. Descriptive docs already reflected the intended behavior — no consumer semantics change, only the implementation catching up
 - `has_dfa` behavior unchanged. `_generate_intervals` collection logic unchanged — intervals are still fetched for DFA purposes whether or not a WORK segment exists
-- Requires sync.py v3.106
+- Requires a sync-layer change
 
 **v11.36 — Effort Response Signal:**
 - New `effort_response` key on every `recent_activities[]` entry in `latest.json`. Deterministic classifier reading session IF (`intensity_factor`) against reported RPE (`rpe`) through the v11.34 RPE Expectation Bands
@@ -79,7 +81,7 @@
 - New rendered `IF:` line on the post-workout per-session block (previously unrendered despite the field being on every activity)
 - Interpretive overlay only. Does NOT alter Feel/RPE Override rules (v11.14) and does NOT enter the readiness P0–P3 ladder
 - Closes the first of the `Known Future Touchpoints` flagged in v11.34
-- Requires sync.py v3.105
+- Requires a sync-layer change
 
 **v11.35 — Aggregate Durability Reliability Gate:**
 - Alert-firing paths now gated on sample size: alarm (28d mean > 5%) requires `qualifying_sessions_28d ≥ 5`; declining warning (7d > 28d by > 2%) requires `qualifying_sessions_7d ≥ 3 AND qualifying_sessions_28d ≥ 5`
@@ -88,28 +90,28 @@
 - Filter criteria (VI ≤ 1.05, ≥ 90 min) unchanged — this is a sample-size safeguard, not a metric redefinition
 - Citation fix: `Rothschild & Maunder (2025)` → `Rothschild et al. (2025)` in two places (9-author paper, `et al.` is the correct form)
 - Addresses GitHub issue #11
-- Requires sync.py v3.104
+- Requires a sync-layer change
 
 **v11.34 — Testing Protocol & RPE Expectation Bands:**
 - New section: `Testing Protocol` — codifies when formal testing adds value given continuous-data coverage (Benchmark Index, DFA a1 crossings, sustained-power observations, power-curve / HR-curve deltas). Continuous-data-first philosophy; tests as validation/confirmation/onboarding, not primary zone source
-- Data-driven staleness signals defined: DFA a1 calibration delta at `moderate`/`high` confidence and >5% dossier delta (primary trigger); Benchmark Index stall/regression outside seasonal expectation; sustained power above prescribed zones (requires ≥2 sessions in rolling 7d — noise guard); power-curve vs HR-curve divergence
+- Data-driven staleness signals defined: DFA a1 calibration delta at `moderate`/`high` confidence and >5% delta vs the athlete's intervals.icu values (primary trigger); Benchmark Index stall/regression outside seasonal expectation; sustained power above prescribed zones (requires ≥2 sessions in rolling 7d — noise guard); power-curve vs HR-curve divergence
 - Negative triggers: non-go readiness, recovery week, illness within 14d, ACWR outside safe band, RI persistent amber, phase Peak or Taper, Race-Week Protocol active, adverse environment
 - Protocol options table: 20-min ×0.95, ramp, 2×8min with honest strengths/limitations. Running equivalents deferred (owner: pace curve extension)
 - Interpretation rules: same-conditions comparison (indoor vs outdoor, protocol, freshness), accept/reject criteria, expected improvement rates by phase
 - New subsection: `RPE Expectation Bands (IF-calibrated)` — reference table mapping IF bands to expected RPE at the work portion. Consumers: test-result validation, general session-effort reading, canonical spec for future Effort Response Signal. Duration, indoor/outdoor, and environmental modifiers documented. Does NOT alter Feel/RPE Override rules (v11.14)
-- Boundaries: does NOT mandate testing, does NOT auto-update dossier zones, does NOT enter readiness P0–P3, does NOT override continuous data
+- Boundaries: does NOT mandate testing, does NOT auto-update the athlete's zones in intervals.icu, does NOT enter readiness P0–P3, does NOT override continuous data
 - Two-way cross-references added: Benchmark Index (Governance Rules) and DFA a1 Zone Validation Use both forward-link to Testing Protocol
-- Documentation-only; no sync.py changes, no template changes, no report changes
+- Documentation-only; no sync-layer change, no template changes, no report changes
 - Future touchpoints flagged: post-workout report RPE-vs-expected commentary (separate template pass), running-specific RPE bands (with pace curve extension)
 
 **v11.33 — Athlete Profile, Notes & Activity Unit Labels:**
 - New top-level `athlete_profile` block in `latest.json` — stable identity fields from existing athlete endpoint call (zero new API calls): `date_of_birth`, derived `age`, `height_m`, `sex`, `location`, `timezone`, `platform_activated`, derived `years_on_platform`
-- New top-level `athlete_notes` block — raw string passthrough of `icu_notes` (free-text athlete-maintained notes). Opaque text; AI may reference for context but should not parse for structured coaching parameters. Future schema work may restructure into a typed mini-dossier
-- Per-field unit labels added to `recent_activities[]` entries: `avg_temp_unit` (`C`/`F` from athlete account setting), `wind_speed_unit` (`MPS`/`KPH`/`MPH` passthrough), `avg_speed_unit` and `max_speed_unit` (always `KPH` — sync.py force-converts m/s → km/h regardless of athlete preference; label surfaces this latent asymmetry vs. account-respecting temp/wind)
+- New top-level `athlete_notes` block — raw string passthrough of `icu_notes` (free-text athlete-maintained notes). Opaque text; AI may reference for context but should not parse for structured coaching parameters. Future schema work may restructure into a typed athlete-profile block
+- Per-field unit labels added to `recent_activities[]` entries: `avg_temp_unit` (`C`/`F` from athlete account setting), `wind_speed_unit` (`MPS`/`KPH`/`MPH` passthrough), `avg_speed_unit` and `max_speed_unit` (always `KPH` — the sync layer force-converts m/s → km/h regardless of athlete preference; label surfaces this latent asymmetry vs. account-respecting temp/wind)
 - Sibling-field form (e.g. `avg_temp` + `avg_temp_unit`) chosen over nested `{value, unit}` object — additive, non-breaking for existing consumers reading these as scalars
 - Behavior posture: `athlete_profile` fields are informational. They do NOT enter readiness P0–P3 logic, threshold computation, or any numeric coaching pathway in the current protocol
 - Data hygiene: silent trailing-space bug in Intervals.icu location strings (`'Aalborg '`, `'Nordjylland '`) handled via `.strip()` in `_compose_location` helper
-- Requires sync.py v3.103
+- Requires a sync-layer change
 
 **v11.32 — has_dfa Split & dfa_summary:**
 - New `has_dfa` boolean on `recent_activities[]` in `latest.json` — independent from `has_intervals`. AlphaHRV-equipped sessions now flag explicitly rather than overloading `has_intervals`
@@ -120,14 +122,14 @@
 - `has_dfa: true` without a `dfa_summary` means AlphaHRV recorded but data quality was insufficient — AI must not cite DFA numbers in that case
 - Interval Data Mirror loading rule simplified to two-flag form: load when `has_intervals: true` OR `has_dfa: true`. Three-trigger rule retired
 - Docs sync across SECTION_11.md, SKILL.md, README.md, SETUP_ASSISTANT.md, examples/README.md, examples/json-examples/README.md, examples/json-local-sync/SETUP.md
-- Requires sync.py v3.101
+- Requires a sync-layer change
 
 **v11.31 — DFA Power Calibration Indoor/Outdoor Split:**
 - `trailing_by_sport.cycling` lt1_estimate / lt2_estimate: watts split by environment — `watts_outdoor`, `watts_indoor` (always present, null when no qualifying sessions in that environment). HR stays pooled (physiology signal, not environment-dependent). Non-cycling sports unchanged (`watts` key retained)
 - Per-environment session counts: `n_sessions_outdoor`, `n_sessions_indoor` on each estimate block. Same 3/4–5/≥6 confidence thresholds apply per environment for watts calibration delta surfacing
-- Zone Validation Use updated: compare `watts_outdoor` against dossier `ftp`, `watts_indoor` against `ftp_indoor`. Fallback: if only one environment has data and the other context's dossier FTP is missing, the available estimate may inform directionally with cross-environment caveat
+- Zone Validation Use updated: compare `watts_outdoor` against the athlete's intervals.icu `ftp`, `watts_indoor` against `ftp_indoor`. Fallback: if only one environment has data and the other context's intervals.icu FTP is missing, the available estimate may inform directionally with cross-environment caveat
 - Shared `_is_indoor_cycling()` resolver (VirtualRide = indoor) used by DFA profile and sustainability profile
-- Requires sync.py v3.100
+- Requires a sync-layer change
 
 **v11.30 — DFA a1 Protocol:**
 - New section: DFA a1 Protocol — non-linear HRV index from AlphaHRV Connect IQ data field, ingested via Intervals.icu streams when direct Garmin sync is used (Strava strips developer fields)
@@ -135,7 +137,7 @@
 - Per-session `dfa` block in `intervals.json`: artifact-filtered avg, 4-band TIZ split (below_lt1 / lt1_transition / transition_lt2 / above_lt2) with HR/power cross-references per band, drift (first vs last third) with `interpretable` flag tied to time-above-LT2, LT1/LT2 crossing-band estimates (avg HR/watts in narrow ±0.05 windows around each threshold), quality block with sufficient flag
 - `dfa_a1_profile` in `latest.json` capability block: latest_session + trailing_by_sport (per sport family, last 7 sessions, confidence low/moderate/high based on crossing-dwell N)
 - Quality gates: ≥20 min valid data per session, max 5% artifact rate per second, AlphaHRV sentinel zeros excluded
-- Tier-2 interpretive signal: does NOT enter readiness P0–P3 ladder, does NOT auto-update dossier zones; surfaces calibration deltas only
+- Tier-2 interpretive signal: does NOT enter readiness P0–P3 ladder, does NOT auto-update the athlete's zones in intervals.icu; surfaces calibration deltas only
 - Drift-on-structured-sessions guard: `interpretable: false` when >15% of session was above LT2 (drift number reflects session structure, not autonomic)
 - Always-emit rule: when AlphaHRV streams fetched, dfa block is always written (even with `quality.sufficient: false`) so AI can distinguish "no AlphaHRV" from "AlphaHRV ran but unusable"
 - `intervals.json` scope widened: activities now included when they have **either** structured intervals **or** an AlphaHRV `dfa` block. Pure endurance rides without intervals appear when DFA recorded — that's where DFA drift detection is most valuable
@@ -146,28 +148,28 @@
 - POST_WORKOUT_REPORT_TEMPLATE.md: new `DFA a1` line in per-session block (conditional on `dfa` block presence), Field Notes row with three-way branching rules (absent / sufficient=false / sufficient=true) and per-interval-vs-session-level distinction note, Assessment Labels row
 - POST_WORKOUT_REPORT_EXAMPLES.md: Example 6 (long Z2 ride with interpretable drift flag triggering fueling/heat cross-reference per protocol) and Example 7 (sweet spot session with consonant DFA reading, drift flagged structural)
 - BLOCK_REPORT_TEMPLATE.md: new `DFA a1 Calibration` section heavily gated (cycling only, validated=true, confidence ≥ moderate), Field Definitions row, Notes entry stressing protocol-anchored thresholds and no auto-zone-updates
-- BLOCK_REPORT_EXAMPLES.md: Example 3 (6-week aerobic base block with DFA calibration surfacing — moderate confidence, empirical LT1 delta vs dossier, LT2 estimate appropriately omitted due to lt2_crossing_sessions=2)
+- BLOCK_REPORT_EXAMPLES.md: Example 3 (6-week aerobic base block with DFA calibration surfacing — moderate confidence, empirical LT1 delta vs the athlete's intervals.icu value, LT2 estimate appropriately omitted due to lt2_crossing_sessions=2)
 - Interval Data Mirror loading rule: extended to also load when an activity has a `dfa` block (covers steady-state rides with no structured intervals — they now appear in intervals.json under the widened entry rule)
-- Requires sync.py v3.99
+- Requires a sync-layer change
 
 **v11.29** — Post-Workout Report Completeness Rules: per-activity block enforcement, anti-merge, anti-hallucination guard for unexplained sessions; new multi-sport example; docs-only  
-**v11.28** — Schema rename: `derived_metrics.polarisation_index` → `easy_time_ratio` (disambiguates from Seiler PI, no value change); sync.py v3.98  
-**v11.27** — Readiness signal hygiene: low-side ACWR removed from ambers, RI amber requires 2-day persistence, ACWR high-side boundary unified ≥1.3/≥1.5; sync.py v3.97  
+**v11.28** — Schema rename: `derived_metrics.polarisation_index` → `easy_time_ratio` (disambiguates from Seiler PI, no value change)  
+**v11.27** — Readiness signal hygiene: low-side ACWR removed from ambers, RI amber requires 2-day persistence, ACWR high-side boundary unified ≥1.3/≥1.5  
 **v11.26** — Nutrition & Pacing Protocol expansion: kJ→carbs dosing, absorption limits, glycogen budget, temperature-driven hydration; fast-start penalty; W′ depletion under glycogen deficit  
 **v11.25** — Course character fix: elevation_per_km as sole density metric; start_time on routes.json events  
-**v11.24** — Route & Terrain Protocol: new section — route analysis, terrain-adjusted power, wind/drafting overlay, segment feasibility, pre-ride briefing; sync.py v3.95
+**v11.24** — Route & Terrain Protocol: new section — route analysis, terrain-adjusted power, wind/drafting overlay, segment feasibility, pre-ride briefing
 
 **v11.23** — Checklist 5b: training metrics must come from current JSON data read, never from conversation history, prior messages, or cached/recalled context  
-**v11.22** — Sustainability Profile capability metric: per-sport power/HR sustainability table for race estimation, 42-day window, cycling three-layer model (actual MMP, Coggan factors, CP/W'); sync.py v3.91  
-**v11.21** — Sleep Signal Simplification: hours-only (quality/score removed from readiness — double-counts HRV/HR); sync.py v3.90  
-**v11.20** — HR Curve Delta capability metric: max sustained HR at 4 anchor durations across two 28-day windows, no sport filter (cross-sport physiological); sync.py v3.88  
-**v11.19** — Power Curve Delta capability metric: MMP at 5 anchor durations across two 28-day windows, rotation index (sprint vs endurance adaptation); sync.py v3.87  
+**v11.22** — Sustainability Profile capability metric: per-sport power/HR sustainability table for race estimation, 42-day window, cycling three-layer model (actual MMP, Coggan factors, CP/W')  
+**v11.21** — Sleep Signal Simplification: hours-only (quality/score removed from readiness — double-counts HRV/HR)  
+**v11.20** — HR Curve Delta capability metric: max sustained HR at 4 anchor durations across two 28-day windows, no sport filter (cross-sport physiological)  
+**v11.19** — Power Curve Delta capability metric: MMP at 5 anchor durations across two 28-day windows, rotation index (sprint vs endurance adaptation)  
 **v11.18** — Environmental Conditions Protocol: delta-based heat stress tiers, session-type modification rules, acclimatization timeline, cold-weather subsection  
 **v11.17** — Phase context + tomorrow preview in report templates (conditional on phase confidence, session planning)  
-**v11.16** — Wellness field expansion: all Intervals.icu wellness fields passthrough (subjective, vitals, body comp, nutrition, lifestyle, cycle); `hrvSDNN` case-bug fix; sync.py v3.85  
-**v11.15** — Per-sport zone preference: `ZONE_PREFERENCE` config for power/HR zone basis per sport family (config → env → default cascade); sync.py v3.83  
+**v11.16** — Wellness field expansion: all Intervals.icu wellness fields passthrough (subjective, vitals, body comp, nutrition, lifestyle, cycle); `hrvSDNN` case-bug fix  
+**v11.15** — Per-sport zone preference: `ZONE_PREFERENCE` config for power/HR zone basis per sport family (config → env → default cascade)  
 **v11.14** — Feel/RPE scope clarified: removed from automated readiness_decision signals (6 remain); three-layer definition (wellness/activity/in-session); Feel/RPE Override block, P2 de-escalation only  
-**v11.13** — Readiness Decision (AAS formalization): pre-computed go/modify/skip, P0–P3 priority ladder, 7 signals, phase modifiers, structured modification output; sync.py v3.72  
+**v11.13** — Readiness Decision (AAS formalization): pre-computed go/modify/skip, P0–P3 priority ladder, 7 signals, phase modifiers, structured modification output  
 **v11.12** — HRRc integration (heart rate recovery, 7d/28d trend); phase transition narrative + phase timeline added to weekly/block report templates  
 
 **v11.11** — Phase Detection v2: dual-stream architecture (retrospective + prospective), 8 phase states, confidence model, hysteresis, reason codes  
@@ -188,15 +190,15 @@
 
 ## Overview
 
-This protocol defines how AI-based coaching systems should reason, query, and provide guidance within an athlete's endurance training ecosystem — ensuring alignment with scientific principles, dossier-defined parameters, and long-term objectives.
+This protocol defines how AI-based coaching systems should reason, query, and provide guidance within an athlete's endurance training ecosystem — ensuring alignment with scientific principles, the athlete's intervals.icu parameters and agreed goals, and long-term objectives.
 
 It enables AI systems to interpret, update, and guide an athlete's plan even without automated API access, maintaining evidence-based and deterministic logic.
 
 ---
 
-### Dossier Architecture Note
+### Athlete Data Architecture Note
 
-Section 11 operates as a **self-contained AI protocol**. All metric definitions, validation ranges, evaluation hierarchies, and decision logic are defined within this document. The athlete's training dossier (DOSSIER.md) is a separate document containing athlete-specific data, goals, and configuration.
+Section 11 operates as a **self-contained AI protocol**. All metric definitions, validation ranges, evaluation hierarchies, and decision logic are defined within this document. The athlete's specific values are NOT stored in this document — FTP, zones, LTHR, and schedule are read live from intervals.icu, and goals and objectives are agreed with the athlete at the outset.
 
 | Content Type | Location | Rationale |
 |-------------|----------|-----------|
@@ -215,7 +217,7 @@ Section 11 operates as a **self-contained AI protocol**. All metric definitions,
 | Capability Metrics | Section 11 (11A, subsection 9) | AI capability-layer analysis (durability, TID comparison, power curve delta, HR curve delta, sustainability profile) |
 | Validation Metadata | Section 11 (11C) | AI audit schema |
 
-AI systems should reference the athlete dossier for athlete-specific values (FTP, zones, goals, schedule) and this protocol for all coaching logic, thresholds, and decision rules.
+AI systems should reference intervals.icu for the athlete's FTP, zones, and schedule, and the goals agreed with the athlete at the outset, and this protocol for all coaching logic, thresholds, and decision rules.
 
 ---
 
@@ -225,15 +227,17 @@ AI systems should reference the athlete dossier for athlete-specific values (FTP
 
 This protocol defines how an AI model should interact with an athlete's training data, apply validated endurance science, and make determinate, auditable recommendations — even without automated data sync from platforms like Intervals.icu, Garmin Connect, or Concept2 Logbook.
 
-If the AI instance does not retain prior context (e.g., new chat or session), it must first reload the dossier, confirm current FTP, HRV, RHR, and phase before providing advice.
+If the AI instance does not retain prior context (e.g., new chat or session), it must first reload the athlete's current values from intervals.icu — confirm current FTP, HRV, RHR, and phase before providing advice.
 
 #### Data Mirror Integration
 
-If the AI or LLM system is not directly or indirectly connected to the Intervals.icu API, it may reference an athlete-provided data mirror. There are three access methods — use the first available:
+The primary path is live access via this MCP server, which reads the Intervals.icu API directly, supplemented by the pre-computed snapshots written by the sync layer (`latest.json` / `history.json`, read via `read_sync_data` locally or from KV in the Worker).
+
+If the AI or LLM system is not connected to this MCP server or the Intervals.icu API, it may instead reference an athlete-provided data mirror. There are three fallback access methods — use the first available:
 
 1. **Local files** — data directory on the same filesystem (agentic platforms)
-2. **GitHub connector** — the athlete's data repo connected via the platform's native GitHub integration. The AI reads `latest.json`, `history.json`, `intervals.json`, and any other committed files (e.g., `DOSSIER.md`, `SECTION_11.md`) directly through the connector. No URLs needed. Connectors are read-only — they cannot trigger GitHub Actions or execute scripts.
-3. **URL fetch** — raw GitHub URLs as defined in the athlete dossier
+2. **GitHub connector** — the athlete's data repo connected via the platform's native GitHub integration. The AI reads `latest.json`, `history.json`, `intervals.json`, and any other committed files (e.g., `SECTION_11.md`) directly through the connector. No URLs needed. Connectors are read-only — they cannot trigger GitHub Actions or execute scripts.
+3. **URL fetch** — raw GitHub URLs as configured for the athlete's data mirror
 
 **Example endpoint format (URL fetch):**
 ```
@@ -250,7 +254,7 @@ https://github.com/[username]/[repo]/tree/main/archive
 https://raw.githubusercontent.com/[username]/[repo]/main/history.json
 ```
 
-> **Note:** The actual URLs for your data mirror are defined in your athlete dossier. When using URL fetch, the AI must fetch from the dossier-specified endpoint. When using a GitHub connector, the AI reads directly from the connected repo.
+> **Note:** The actual URLs for the data mirror are configured per athlete. When using URL fetch, the AI must fetch from the configured endpoint. When using a GitHub connector, the AI reads directly from the connected repo.
 
 This file represents a synchronized snapshot of current Intervals.icu metrics and activity summaries, structured for deterministic AI parsing and audit compliance.
 
@@ -298,7 +302,7 @@ If the data appears stale or outdated, the AI must explicitly request a data ref
 }
 ```
 
-**Sport families** are stable, low-cardinality modality identifiers used for threshold isolation: `cycling`, `run`, `swim`, `rowing`, `ski`, `walk`, `strength`, `other`. These map from Intervals.icu activity types via the `SPORT_FAMILIES` constant in sync.py.
+**Sport families** are stable, low-cardinality modality identifiers used for threshold isolation: `cycling`, `run`, `swim`, `rowing`, `ski`, `walk`, `strength`, `other`. These map from Intervals.icu activity types via the `SPORT_FAMILIES` constant in `src/sport-families.js`.
 
 **Field semantics:**
 
@@ -352,7 +356,7 @@ These fields are informational context for AI coaching. They do NOT enter readin
 
 #### Athlete Notes Schema
 
-`athlete_notes` is a raw string passthrough of the athlete's `icu_notes` field — free-text athlete-maintained notes (training plan summaries, weekly structure, season context). Treated as opaque text by the protocol; AI may reference it for context but should not parse it for structured coaching parameters. Future schema work may restructure this into a typed mini-dossier.
+`athlete_notes` is a raw string passthrough of the athlete's `icu_notes` field — free-text athlete-maintained notes (training plan summaries, weekly structure, season context). Treated as opaque text by the protocol; AI may reference it for context but should not parse it for structured coaching parameters. Future schema work may restructure this into a typed athlete-profile block.
 
 #### Activity Unit Labels
 
@@ -360,11 +364,11 @@ These fields are informational context for AI coaching. They do NOT enter readin
 
 - `avg_temp_unit`: `"C"` or `"F"` — reflects athlete's Intervals.icu account temperature setting; the API returns `avg_temp` in this unit.
 - `wind_speed_unit`: `"MPS"`, `"KPH"`, or `"MPH"` — reflects athlete's account wind setting; the API returns `wind_speed` in this unit.
-- `avg_speed_unit` / `max_speed_unit`: always `"KPH"` — sync.py converts m/s → km/h unconditionally regardless of athlete preference. The new `display.avg_speed`/`display.max_speed` blocks (see *Display Unit Semantics* below) resolve the user-facing asymmetry; these labels are retained for backward compatibility.
+- `avg_speed_unit` / `max_speed_unit`: always `"KPH"` — the sync layer converts m/s → km/h unconditionally regardless of athlete preference. The new `display.avg_speed`/`display.max_speed` blocks (see *Display Unit Semantics* below) resolve the user-facing asymmetry; these labels are retained for backward compatibility.
 
 #### Display Unit Semantics
 
-**Purpose.** Many narrative-bearing fields ship in canonical metric units (km, m, kg, m/h-as-km/h, m/km) regardless of the athlete's Intervals.icu unit preferences. This is by design — calculations use stable units. Narration is a separate concern: the AI must quote values in the athlete's preferred system without doing the conversion itself. sync.py emits a parallel `display` sub-object alongside every canonical metric field, with the conversion already applied.
+**Purpose.** Many narrative-bearing fields ship in canonical metric units (km, m, kg, m/h-as-km/h, m/km) regardless of the athlete's Intervals.icu unit preferences. This is by design — calculations use stable units. Narration is a separate concern: the AI must quote values in the athlete's preferred system without doing the conversion itself. The sync layer emits a parallel `display` sub-object alongside every canonical metric field, with the conversion already applied.
 
 **Three-layer signal:**
 
@@ -378,7 +382,7 @@ These fields are informational context for AI coaching. They do NOT enter readin
 - **Use canonical metric fields (`*_km`, `*_m`, `*_kg`) for calculations only — never quote them in narrative.** They are stable inputs to math, not display strings.
 - **Cross-record arithmetic stays in canonical units.** Sum `distance_km` across activities → canonical total. Display-convert that single result at narration. Do not sum `display.distance.value` across records (the unit may already be imperial; you'd report a meaningless number to a metric athlete after re-conversion). `summary.by_activity_type[].distance_km` is built this way: the running canonical sum is what's stored; the row's `display.distance` is the converted snapshot of that sum.
 - **Universal physics units are pref-independent and stay as-is.** W/kg, kJ, IF, %, kJ/kg, ml/kg/min — these are scientific units, not display choices.
-- **Heat-protocol °C thresholds are canonical scientific units, not pref-dependent.** The Environmental Conditions Protocol's tier thresholds (15°C floor, 38°C ceiling, +5/+8/+12°C deltas) are physical-science calibrations from the literature — same status as W/kg, IF, or PI. Quote thresholds as °C in narrative regardless of athlete preference. Do not display-convert °C → °F inline at narration time; that violates the "AI does not convert" rule. If a future sync.py revision precomputes a display-converted threshold value into the data layer, narrate from that block; until then, °C stands as the canonical reference. The athlete's reported temperature value (`avg_temp` etc.) is already returned by Intervals.icu in the athlete's account unit and labelled via `weather_summary.units.temp` / `avg_temp_unit` — that path is unchanged.
+- **Heat-protocol °C thresholds are canonical scientific units, not pref-dependent.** The Environmental Conditions Protocol's tier thresholds (15°C floor, 38°C ceiling, +5/+8/+12°C deltas) are physical-science calibrations from the literature — same status as W/kg, IF, or PI. Quote thresholds as °C in narrative regardless of athlete preference. Do not display-convert °C → °F inline at narration time; that violates the "AI does not convert" rule. If a future sync-layer revision precomputes a display-converted threshold value into the data layer, narrate from that block; until then, °C stands as the canonical reference. The athlete's reported temperature value (`avg_temp` etc.) is already returned by Intervals.icu in the athlete's account unit and labelled via `weather_summary.units.temp` / `avg_temp_unit` — that path is unchanged.
 - **Sustainability profile `weight_kg` is canonical-only by design.** It is a calculation input for W/kg in the sustainability anchors block, not a user-facing weight value. The W/kg result is itself unit-universal, so no display block is needed there.
 
 **Where display blocks ship:**
@@ -410,9 +414,9 @@ In addition to the real-time `latest.json` mirror, athletes may provide a `histo
 - **FTP timeline:** Every FTP change with date and type (indoor/outdoor)
 - **Data gaps:** Periods with missing or low data, flagged factually without inference
 
-`history.json` is auto-generated by sync.py when missing or stale (>28 days), pulling fresh from the Intervals.icu API.
+`history.json` is auto-generated by the sync layer when missing or stale (>28 days), pulling fresh from the Intervals.icu API.
 
-**weekly_180d row fields (v3.110):**
+**weekly_180d row fields:**
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -433,7 +437,7 @@ In addition to the real-time `latest.json` mirror, athletes may provide a `histo
 
 N≥1 emits a mean for all three capability fields. Use `*_qualifying` to calibrate confidence — a single-session mean is a real observation, not an estimate. Alert-layer gates (N≥2/5 for durability, N≥3 for HRRc) remain in `derived_metrics.capability` only.
 
-**monthly_*y row fields (v3.110):**
+**monthly_*y row fields:**
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -881,7 +885,7 @@ Reference alongside objective metrics when evaluating readiness, recovery, or ad
 
 ### 3. Context Integrity
 
-All advice must respect current dossier targets and progression logic. No training adjustments should violate:
+All advice must respect the athlete's agreed targets and progression logic. No training adjustments should violate:
 - Weekly volume tolerance
 - Polarisation ratio (80/20 intensity)
 - Planned block phasing
@@ -977,7 +981,7 @@ When validating datasets, cross-check computed fatigue and load ratios against v
 | Fatigue Trend                | −0.2 to +0.2                                       | —                                  | —                                   | ΔATL − ΔCTL (stable range)                                          |
 | Easy Time Ratio              | 0.75–0.9                                           | —                                  | —                                   | ~80/20 distribution                                                 |
 | Durability Index (DI)        | ≥ 0.9                                              | —                                  | —                                   | Avg Power last hour ÷ first hour                                    |
-| Readiness Decision         | Pre-computed go/modify/skip (P0–P3 ladder)         | —                                  | —                                   | See Readiness Decision section. sync.py v3.72+          |
+| Readiness Decision         | Pre-computed go/modify/skip (P0–P3 ladder)         | —                                  | —                                   | See Readiness Decision section. The sync layer         |
 | Load Ratio                   | < 3500                                             | —                                  | —                                   | Monotony × Mean Load — cumulative stress indicator                  |
 | Stress Tolerance             | 3–6 sustainable / <3 low buffer / >6 high capacity | —                                  | —                                   | (Strain ÷ Monotony) ÷ 100 — load absorption capacity                |
 | Load-Recovery Ratio          | <2.5 normal / ≥2.5 alert                           | —                                  | —                                   | 7-day Load ÷ RI — **secondary** overreach detector (see note below) |
@@ -1014,7 +1018,7 @@ If multiple data sources conflict:
 2. **Intervals.icu JSON Mirror** → Verified Tier-1 mirror source (local files, GitHub connector, or URL fetch — all carry the same trust level)
 3. **Garmin Connect** → Backup for HR, sleep, RHR
 4. **Athlete-provided data** → Valid if recent (<7 days) and stated explicitly
-5. **Dossier Baselines** → Fallback reference
+5. **Agreed Baselines** → Fallback reference (the athlete's intervals.icu zones and the goals agreed at the outset)
 
 ---
 
@@ -1050,7 +1054,7 @@ AI systems must only consider caloric-reduction or weight-optimization phases du
 
 ### Readiness Decision (v11.13)
 
-`sync.py` v3.72+ pre-computes a deterministic `readiness_decision` object using a priority ladder. AI coaches read this as the baseline go/modify/skip recommendation. The AI writes the coaching note and can override with explicit explanation, but the default decision is auditable and reproducible across LLMs.
+The sync layer pre-computes a deterministic `readiness_decision` object using a priority ladder. AI coaches read this as the baseline go/modify/skip recommendation. The AI writes the coaching note and can override with explicit explanation, but the default decision is auditable and reproducible across LLMs.
 
 **Priority Ladder (first match wins):**
 
@@ -1279,7 +1283,7 @@ It governs acute, session-level performance safety, ensuring localized overreach
 - Sleep Quality / Sleep Score: Excluded from readiness classification (v11.21). These are device-derived composites of HRV + HR during sleep — signals already captured independently. Downstream impact of poor sleep surfaces in HRV and RHR. Quality/score remain in wellness data as coaching context.
 - Feel (1–5): Manual subjective entry (1=Strong, 2=Good, 3=Normal, 4=Poor, 5=Weak)
 
-**Extended Wellness Fields (v3.85+):** sync.py passes through all Intervals.icu wellness fields — subjective state (stress, mood, motivation, injury, fatigue, soreness, hydration), vitals (spO2, blood glucose, blood pressure, Baevsky SI, lactate, respiration), body composition (body fat, abdomen), nutrition (kcal, carbs, protein, fat), lifestyle (steps, hydration volume), and cycle tracking (menstrual phase). All categorical fields use a 1→4 positional scale where **1 = best state, 4 = worst state**. Per-field labels are in `wellness_field_scales` in READ_THIS_FIRST. Fields are null when not reported. These are coaching context — none are wired into the automated readiness_decision pipeline.
+**Extended Wellness Fields:** the sync layer passes through all Intervals.icu wellness fields — subjective state (stress, mood, motivation, injury, fatigue, soreness, hydration), vitals (spO2, blood glucose, blood pressure, Baevsky SI, lactate, respiration), body composition (body fat, abdomen), nutrition (kcal, carbs, protein, fat), lifestyle (steps, hydration volume), and cycle tracking (menstrual phase). All categorical fields use a 1→4 positional scale where **1 = best state, 4 = worst state**. Per-field labels are in `wellness_field_scales` in READ_THIS_FIRST. Fields are null when not reported. These are coaching context — none are wired into the automated readiness_decision pipeline.
 
 **Feel/RPE exists at three levels — usage differs by layer:**
 
@@ -1311,7 +1315,7 @@ Daily metrics synchronised through data hierarchy and mirrored in JSON dataset e
 
 **Purpose:** Surface body weight as a training signal in block reports (W/kg headline) and weekly reports (trend). Gated by data density. No daily noise.
 
-**Architecture:** All weight metrics surfaced in reports are computed in `sync.py` and live under `current_status.weight` in `latest.json`. The AI layer interprets only — no slope, delta, or W/kg arithmetic against raw `wellness_data[]` or `daily_90d` / `weekly_180d` weight values for the report fields below. A field's absence from the JSON is the explicit signal that its data-density gate failed; the AI omits the corresponding report section silently — no "insufficient data" boilerplate.
+**Architecture:** All weight metrics surfaced in reports are computed in the sync layer and live under `current_status.weight` in `latest.json`. The AI layer interprets only — no slope, delta, or W/kg arithmetic against raw `wellness_data[]` or `daily_90d` / `weekly_180d` weight values for the report fields below. A field's absence from the JSON is the explicit signal that its data-density gate failed; the AI omits the corresponding report section silently — no "insufficient data" boilerplate.
 
 **Fields:**
 
@@ -1346,7 +1350,7 @@ Daily metrics synchronised through data hierarchy and mirrored in JSON dataset e
 - **Daily-swing triggers** (e.g., "weight dropped 1 kg overnight"). Single-day weigh-in deltas are dominated by hydration and gut content; flagging them would contradict the trend-not-weigh-in rule.
 - **Indoor / outdoor split** of weight signals. Per-environment sample size is too low to support a clean split today. Re-evaluate once trailing windows fill — `indoor` flagging on activities is already captured per session, so the data exists for a future split.
 - **Hydration correction** of weight readings. Out of scope for v1.
-- **"Fueling protected" inference.** `sync.py` carries no intake data; any such claim would be inferential from HRV / RPE / power / decoupling and risks moralising the weight section.
+- **"Fueling protected" inference.** The sync layer carries no intake data; any such claim would be inferential from HRV / RPE / power / decoupling and risks moralising the weight section.
 - **Pre-workout and post-workout weight sections.** Intentionally untouched. Weight belongs in retrospective views (block, weekly), not in same-day decision making at the v1 maturity.
 
 These deferrals live in this section rather than `SECTION_11_TODO.md` to keep the v1 boundary cohesive with the feature spec; they can be revisited once the underlying data foundations or athlete-supplied config land.
@@ -1355,7 +1359,7 @@ These deferrals live in this section rather than `SECTION_11_TODO.md` to keep th
 
 ### Environmental Conditions Protocol
 
-**Purpose:** Provide data-driven environmental training modification rules when athletes exercise in heat stress conditions. No `sync.py` changes — the AI layer interprets existing temperature and humidity fields (`avg_temp`, `humidity`, `weather`, `wind_speed` per activity) and fetched forecast data.
+**Purpose:** Provide data-driven environmental training modification rules when athletes exercise in heat stress conditions. No sync-layer change — the AI layer interprets existing temperature and humidity fields (`avg_temp`, `humidity`, `weather`, `wind_speed` per activity) and fetched forecast data.
 
 #### Heat Stress Assessment
 
@@ -1638,7 +1642,7 @@ When the AI knows the athlete will be in a group (race, group ride, sportive), p
 
 #### Segment Reasoning (Strava Integration)
 
-When the agentic platform has Strava API access, segment data enriches route intelligence. This is protocol for the AI layer — not pipeline automation in `sync.py`.
+When the agentic platform has Strava API access, segment data enriches route intelligence. This is protocol for the AI layer — not pipeline automation in the sync layer.
 
 **Priority hierarchy:** Starred segments (from `/athlete/segments/starred`) that fall on today's route are automatic priority targets. The athlete may also name specific segments in conversation. All other segments found along the route via `/segments/explore` are opportunistic — mention if conditions are perfect, don't pre-brief.
 
@@ -1655,7 +1659,7 @@ When the agentic platform has Strava API access, segment data enriches route int
 | `GET /athlete/segments/starred` | Athlete's starred segments — automatic priorities |
 | `GET /segment_efforts?segment_id={id}` | Athlete's effort history — PR context |
 
-The AI does not call these endpoints directly from `sync.py`. They are available when the agentic platform has Strava OAuth access. Reasoning rules apply regardless of how segment data arrives — Strava API, athlete-provided segment IDs, or manual upload.
+The AI does not call these endpoints directly from the sync layer. They are available when the agentic platform has Strava OAuth access. Reasoning rules apply regardless of how segment data arrives — Strava API, athlete-provided segment IDs, or manual upload.
 
 #### Nutrition Timing Relative to Terrain
 
@@ -1688,7 +1692,7 @@ The terrain rules above govern *when* to fuel. This table governs *how much*. Ca
 | Glucose + fructose (1:0.8 ratio) | ~90 g/hour | Dual transporters (SGLT1 + GLUT5) |
 | Gut-trained elite athletes | Up to 120 g/hour | Trained absorption capacity (Hearris et al., 2022) |
 
-The absorption ceiling constrains what's achievable regardless of expenditure rate. An athlete burning 900 kJ/hour who hasn't gut-trained above 60 g/hour cannot absorb 90 g/hour just because the dosing table says so. The AI should match intake recommendations to the athlete's trained absorption capacity when known (from dossier or conversation), and default to 60 g/hour single-source when unknown.
+The absorption ceiling constrains what's achievable regardless of expenditure rate. An athlete burning 900 kJ/hour who hasn't gut-trained above 60 g/hour cannot absorb 90 g/hour just because the dosing table says so. The AI should match intake recommendations to the athlete's trained absorption capacity when known (from intervals.icu or conversation), and default to 60 g/hour single-source when unknown.
 
 Absorption form does not matter — drinks, gels, and chews produce equivalent exogenous carbohydrate oxidation rates at matched doses (Hearris et al., 2022).
 
@@ -1751,7 +1755,7 @@ The same terrain and weather framework also applies retrospectively to completed
 
 The primary consumer is **post-workout interpretation**: explaining elevated RPE, HR drift, or pacing patterns by reference to the actual terrain and conditions encountered. Secondary consumers are weekly and block-level review, where comparing terrain/weather exposure across sessions adds context to load patterns. The pre-ride briefing flow described above continues to use planned-route data from `routes.json`, not completed-activity data.
 
-**`terrain_summary` shape:** Same base schema as `routes.json` — `total_distance_km`, `total_elevation_m`, `elevation_per_km`, `course_character`, `climbs[]`, `descents[]` — with activity-specific additions: `max_grade_pct` (steepest detected pitch), `grade_distribution` (percent of distance in `flat_pct` / `gentle_pct` / `moderate_pct` / `steep_pct` buckets), `start_coords`. The `polyline` field is intentionally **not** present on activities to keep `latest.json` lean — for full GPS at higher resolution, fetch raw streams via `pull.py trace --activity-id <id>`. All climb classification, course character thresholds, and gradient interpretation rules from the planned-route protocol above apply unchanged.
+**`terrain_summary` shape:** Same base schema as `routes.json` — `total_distance_km`, `total_elevation_m`, `elevation_per_km`, `course_character`, `climbs[]`, `descents[]` — with activity-specific additions: `max_grade_pct` (steepest detected pitch), `grade_distribution` (percent of distance in `flat_pct` / `gentle_pct` / `moderate_pct` / `steep_pct` buckets), `start_coords`. The `polyline` field is intentionally **not** present on activities to keep `latest.json` lean — for full GPS at higher resolution, fetch raw streams via the streams API (the `get_activity_streams` tool). All climb classification, course character thresholds, and gradient interpretation rules from the planned-route protocol above apply unchanged.
 
 **`weather_summary` shape:** Pre-computed Intervals/Open-Meteo data — `avg_wind_speed`, `avg_wind_gust`, `prevailing_wind_deg`, `headwind_pct`, `tailwind_pct`, `avg_temp` (ambient), `avg_temp_device` (sensor — typically reads higher in direct sun), `avg_feels_like` with `min`/`max`, ambient temp range, `clouds_pct`, `rain`, `snow`. A nested `units` block (`{wind, temp, rain}`) gives the unit code for each value — the AI MUST read this rather than assume metric. The same Wind Overlay headwind/tailwind logic from the planning protocol applies in retrospect.
 
@@ -1792,7 +1796,7 @@ These are anchors for surfacing context, not gates. Apply judgment to the specif
 
 *Descriptive phrases.* Render whenever the corresponding summary is present. The bands describe environmental conditions as recorded; sport-specific interpretation (heat tiers, cold warm-up rules) remains the responsibility of the Environmental Conditions Protocol.
 
-- Terrain phrase: `"{course_character} route ({elevation_per_km} m/km)"`. Reuse the classification produced by `sync.py` — never reclassify.
+- Terrain phrase: `"{course_character} route ({elevation_per_km} m/km)"`. Reuse the classification produced by the sync layer — never reclassify.
 - Wind band (`avg_wind_speed`): calm < 3 / breezy 3–6 / windy 6–9 / very windy ≥ 9.
 - Temp band (`avg_feels_like`): cold < 5 / cool 5–12 / mild 12–18 / warm 18–25 / hot > 25.
 - Weather phrase: `"{wind_band} {temp_band} conditions"`. If `rain > 0`, append `", wet"`.
@@ -1864,7 +1868,7 @@ DFA a1 (Detrended Fluctuation Analysis, short-term scaling exponent α1) is a no
 
 **Non-Garmin athletes:** see [`examples/dfa_a1/NON_GARMIN.md`](../examples/dfa_a1/NON_GARMIN.md) for the current status of Suunto, Hammerhead Karoo, Wahoo, Coros, Polar, and phone-based fallback paths. As of v11.30, **only Garmin + AlphaHRV is verified end-to-end**. Other paths are documented as investigational with verification commands ready for users on those platforms to run.
 
-**Ingest path:** Direct Garmin Connect → Intervals.icu sync. AlphaHRV writes DFA a1 to the FIT file as a developer field. Intervals.icu ingests it natively and exposes it as a per-second `dfa_a1` stream plus per-interval `average_dfa_a1` field. `sync.py` reads both via the streams API and produces the per-session `dfa` block in `intervals.json`.
+**Ingest path:** Direct Garmin Connect → Intervals.icu sync. AlphaHRV writes DFA a1 to the FIT file as a developer field. Intervals.icu ingests it natively and exposes it as a per-second `dfa_a1` stream plus per-interval `average_dfa_a1` field. The sync layer reads both via the streams API and produces the per-session `dfa` block in `intervals.json`.
 
 **Quality dependency:** AlphaHRV needs uncorrupted RR data. The watch/head-unit ANT+ link to the strap must be clean. Connect IQ data fields can only run when active in the recording profile, so the field must be installed AND added to a data screen for the activity profile.
 
@@ -1883,13 +1887,13 @@ The published mapping from DFA a1 to physiological thresholds:
 **This mapping is cycling-validated** (Rowlands et al. 2017, Gronwald et al. 2020, Schaffarczyk et al. 2023, Mateo-March et al. 2023). Other sports get rollups computed but `validated: false` is flagged in `dfa_a1_profile.trailing_by_sport.{sport}` — running has higher movement-induced HRV noise and different autonomic dynamics, and per-sport calibration is not yet established. Treat non-cycling DFA estimates as informational only.
 
 **Important caveats:**
-- Athlete-specific calibration is needed before DFA-derived thresholds replace dossier values. The protocol surfaces deltas; the human decides.
+- Athlete-specific calibration is needed before DFA-derived thresholds replace the athlete's current zone values in intervals.icu. The protocol surfaces deltas; the human decides.
 - Fatigue shifts the relationship — a fatigued athlete's DFA a1 is depressed at submaximal work, so a "low" reading mid-session may reflect accumulated fatigue rather than true threshold crossing.
 - Heat, dehydration, and glycogen state all push DFA a1 down at constant external load. Cross-reference Environmental Conditions Protocol and nutrition state before interpreting low readings as fitness signal.
 
 #### Pre-Computed Signals Available
 
-The AI does not compute DFA a1 statistics — `sync.py` does. The AI reads pre-computed values from two locations:
+The AI does not compute DFA a1 statistics — the sync layer does. The AI reads pre-computed values from two locations:
 
 **`intervals.json` per-activity `dfa` block** (see Interval Data Mirror section above for full schema). Contains: artifact-filtered avg + quartiles, 4-band TIZ split with HR/power cross-references per band, drift (first vs last third) with `interpretable` flag, LT1/LT2 crossing-band estimates (`avg_hr`/`avg_watts` in narrow ±0.05 windows around each threshold), quality block.
 
@@ -1903,16 +1907,16 @@ The AI does not compute DFA a1 statistics — `sync.py` does. The AI reads pre-c
 
 #### Zone Validation Use
 
-When `latest.json.derived_metrics.capability.dfa_a1_profile.trailing_by_sport.cycling` has `confidence: "moderate"` or `"high"`, the AI may compare the empirical LT1/LT2 estimates against the dossier-defined cycling thresholds.
+When `latest.json.derived_metrics.capability.dfa_a1_profile.trailing_by_sport.cycling` has `confidence: "moderate"` or `"high"`, the AI may compare the empirical LT1/LT2 estimates against the athlete's intervals.icu cycling thresholds.
 
-**Environment-aware comparison (cycling):** Compare `watts_outdoor` against dossier `ftp` (outdoor). Compare `watts_indoor` against dossier `ftp_indoor`. Compare `hr` (pooled) against `lthr`. Use per-environment `n_sessions_outdoor` / `n_sessions_indoor` to assess depth — apply the same 3/4–5/≥6 confidence thresholds per environment before surfacing a watts calibration delta. If only one environment has sufficient data and the dossier lacks a threshold for the other environment, the available estimate may inform the missing context as a directional reference — but note the cross-environment caveat explicitly.
+**Environment-aware comparison (cycling):** Compare `watts_outdoor` against the athlete's intervals.icu `ftp` (outdoor). Compare `watts_indoor` against `ftp_indoor`. Compare `hr` (pooled) against `lthr`. Use per-environment `n_sessions_outdoor` / `n_sessions_indoor` to assess depth — apply the same 3/4–5/≥6 confidence thresholds per environment before surfacing a watts calibration delta. If only one environment has sufficient data and intervals.icu lacks a threshold for the other environment, the available estimate may inform the missing context as a directional reference — but note the cross-environment caveat explicitly.
 
-**If the empirical estimate disagrees with the dossier value by >5%:**
+**If the empirical estimate disagrees with the athlete's current zone value in intervals.icu by >5%:**
 - The AI surfaces a calibration delta as a coaching observation
-- The AI does NOT auto-update dossier zones
+- The AI does NOT auto-update the athlete's zones in intervals.icu
 - The AI does NOT modify prescribed workouts based on DFA-derived thresholds
 - The athlete is told the delta exists, the magnitude, the environment, and the underlying N sessions
-- Final decision on whether to retest formally and update dossier rests with the athlete
+- Final decision on whether to retest formally and update intervals.icu rests with the athlete
 
 **Confidence floor:** Do not surface calibration deltas at `confidence: "low"` (3 sessions). Single-session noise is too high. Wait for `moderate` or `high`. Per-environment watts deltas additionally require the environment-specific `n_sessions_outdoor` or `n_sessions_indoor` to meet the same thresholds.
 
@@ -1957,8 +1961,8 @@ The AI must check the quality block before any DFA-based statement:
 DFA a1 is a **Tier-2 interpretive signal**. The following constraints are absolute:
 
 1. **Does NOT enter the readiness P0–P3 ladder.** No DFA-based readiness override. The readiness decision uses its existing 7 signals only.
-2. **Does NOT auto-update dossier zones.** The AI surfaces deltas, the human decides on retesting and updating.
-3. **Does NOT modify prescribed workout intensity.** A planned threshold session remains threshold even if yesterday's DFA suggested LT2 is 5W lower than dossier — the session is executed as planned, the calibration question is handled separately.
+2. **Does NOT auto-update the athlete's zones in intervals.icu.** The AI surfaces deltas, the human decides on retesting and updating.
+3. **Does NOT modify prescribed workout intensity.** A planned threshold session remains threshold even if yesterday's DFA suggested LT2 is 5W lower than the athlete's current zone value in intervals.icu — the session is executed as planned, the calibration question is handled separately.
 4. **One signal among many.** DFA a1 disagreeing with HR/power/RPE/feel is an observation, not a verdict. The AI cross-references rather than treating DFA as ground truth.
 5. **Quality gates are non-negotiable.** When quality fails, the AI refuses to interpret. No "best guess" from insufficient data.
 
@@ -1987,7 +1991,7 @@ This section codifies those situations — not as a mandate, but as guidance on 
 
 #### When Formal Testing Adds Value
 
-- **New athlete onboarding** — no historical data to extrapolate from. A single baseline test anchors the dossier; subsequent tracking reverts to continuous data.
+- **New athlete onboarding** — no historical data to extrapolate from. A single baseline test anchors the athlete's intervals.icu zones; subsequent tracking reverts to continuous data.
 - **Athlete confidence** — continuous signals converge on a zone shift, but the athlete wants a concrete number to anchor training on before adjusting.
 - **Contradictory signals** — EF trending up while power curve is flat (or the reverse); Benchmark Index positive while DFA a1 profile suggests LT1 regression. A single test resolves which signal to trust.
 - **Post-break return** — returning from injury, illness, or extended layoff where continuous data was interrupted. Pre-break zones are unreliable; a test re-anchors.
@@ -1996,7 +2000,7 @@ This section codifies those situations — not as a mandate, but as guidance on 
 
 The AI may surface a *test suggestion* (not a requirement) when one or more of the following are true. These are triggers for conversation, not prescriptions:
 
-- **DFA a1 calibration delta** — `dfa_a1_profile.trailing_by_sport.cycling` at `moderate` or `high` confidence reports an LT1 or LT2 estimate >5% away from dossier FTP/LTHR (see `Zone Validation Use` above). This is the primary continuous trigger.
+- **DFA a1 calibration delta** — `dfa_a1_profile.trailing_by_sport.cycling` at `moderate` or `high` confidence reports an LT1 or LT2 estimate >5% away from the athlete's intervals.icu FTP/LTHR (see `Zone Validation Use` above). This is the primary continuous trigger.
 - **Benchmark Index stall or regression outside seasonal expectation** — sustained flat or negative Benchmark Index when the Seasonal Context table predicts progressive gains (e.g., Late Base / Build showing 0% or negative). See Benchmark Index section above for seasonal baselines.
 - **Sustained power above prescribed zones** — a qualifying session is one where work-interval average power ran ≥3% above prescribed target AND reported RPE landed within or below the expected band for the IF actually achieved. Trigger fires when ≥2 qualifying sessions occur in a rolling 7d window; single-session overshoots are noise and do not trigger.
 - **Power-curve vs HR-curve divergence** — shipped `power_curve_delta` shows improvement at a duration while `hr_curve_delta` is flat or negative at the same duration (same HR now sustaining more power). A test at that duration validates the capability shift.
@@ -2028,7 +2032,7 @@ A test during non-go readiness produces a number that anchors future training on
 
 **Running equivalents** (30-min threshold run, 5K time trial, critical speed test) — deferred to a later version. Owner: pace curve extension when running data becomes available.
 
-All cycling protocols are outdoor-or-indoor; the result inherits the environment. Indoor tests produce an indoor FTP; outdoor tests produce an outdoor FTP. The shipped `ftp_indoor` / `ftp` dossier split already supports this — the athlete's dossier should carry both if both environments are trained.
+All cycling protocols are outdoor-or-indoor; the result inherits the environment. Indoor tests produce an indoor FTP; outdoor tests produce an outdoor FTP. The shipped `ftp_indoor` / `ftp` split in intervals.icu already supports this — the athlete's intervals.icu settings should carry both if both environments are trained.
 
 #### Interpretation Rules
 
@@ -2088,7 +2092,7 @@ Report rendering: the post-workout report template emits `Effort response: [valu
 Testing Protocol constraints are absolute:
 
 1. **Does NOT mandate testing.** The AI suggests; the athlete decides. An athlete who never formally tests but has continuous data coverage remains correctly served.
-2. **Does NOT auto-update dossier zones.** A completed test produces a result; the athlete decides whether to update dossier thresholds. The AI surfaces the number and the delta from current dossier, nothing more.
+2. **Does NOT auto-update the athlete's zones in intervals.icu.** A completed test produces a result; the athlete decides whether to update their intervals.icu thresholds. The AI surfaces the number and the delta from the athlete's current zone values in intervals.icu, nothing more.
 3. **Does NOT enter the readiness P0–P3 ladder.** A suggested-or-scheduled test does not modify the readiness decision. The readiness decision uses its existing 6 signals only.
 4. **Does NOT override continuous data.** When continuous signals and a recent test disagree, investigate first (pacing? environment? fueling?). A single test is one data point; the continuous picture accumulates many.
 5. **Does NOT prescribe running or SkiErg tests.** Running equivalents deferred. SkiErg and rowing tests out of current scope.
@@ -2650,7 +2654,7 @@ To ensure AI systems evaluate metrics in the correct order:
 
 ### Update & Version Guidance
 
-The dossier (DOSSIER.md) and SECTION_11.md is the **single source of truth** for all thresholds, metrics, and structural logic.  
+The athlete's intervals.icu data (FTP, zones, LTHR) together with the goals agreed at the outset, and SECTION_11.md, are the **single source of truth** for all thresholds, metrics, and structural logic.  
 AI systems must **never overwrite base data** — all updates require **explicit athlete confirmation**.  
 
 When new inputs are provided (e.g., FTP test, updated HRV, weight), the AI must assist with **structured version-control** (e.g., `v0.7.5 → v0.7.6`).
@@ -2685,7 +2689,7 @@ If new metrics are imported from external platforms (e.g., Whoop, Oura, HRV4Trai
 ### Goal Alignment Reference
 
 All AI recommendations must remain aligned with the athlete’s **long-term roadmap** (see *Section 3: Training Schedule & Framework*).  
-The dossier’s performance-objective tables define the **authoritative phase structure** and **KPI trajectory** guiding progression and adaptation.
+The goals and performance objectives agreed with the athlete define the **authoritative phase structure** and **KPI trajectory** guiding progression and adaptation.
 
 ---
 
@@ -2851,7 +2855,7 @@ End of Section 11 A. AI Coach Protocol
 ## 11 B. AI Training Plan Protocol
 
 **Purpose:**  
-Define deterministic, phase-aligned rules for AI or automated systems that generate or modify training plans, ensuring consistency with the dossier’s endurance framework, physiological safety, and audit traceability.
+Define deterministic, phase-aligned rules for AI or automated systems that generate or modify training plans, ensuring consistency with the athlete's agreed endurance framework, physiological safety, and audit traceability.
 
 ---
 
@@ -3007,8 +3011,8 @@ This subsection defines the formal self-validation and audit metadata structure 
       },
       "previous_phase": "Build",
       "phase_duration_weeks": 4,
-      "dossier_declared": null,
-      "dossier_agreement": null
+      "declared_phase": null,
+      "phase_agreement": null
     },
     "seasonal_context": "Late Base / Build",
     "consistency_index": 0.92,
@@ -3069,9 +3073,9 @@ This subsection defines the formal self-validation and audit metadata structure 
 | `phase_detection.basis.stream_agreement` | boolean/null | Whether Stream 1 and Stream 2 suggested the same phase. null if either stream has no opinion. |
 | `phase_detection.previous_phase` | string/null | Phase from last weekly_180d row (feeds hysteresis).                              |
 | `phase_detection.phase_duration_weeks` | number | Consecutive weeks classified as current phase.                                 |
-| `phase_detection.dossier_declared` | string/null | Phase declared in athlete dossier (optional input).                            |
-| `phase_detection.dossier_agreement` | boolean/null | Whether detected phase matches dossier declaration.                           |
-| `readiness_decision`           | object   | Pre-computed go/modify/skip decision (v3.72+). Top-level, alongside `alerts`. |
+| `phase_detection.declared_phase` | string/null | Phase declared by the athlete (optional input).                            |
+| `phase_detection.phase_agreement` | boolean/null | Whether detected phase matches the athlete's declared phase.                           |
+| `readiness_decision`           | object   | Pre-computed go/modify/skip decision. Top-level, alongside `alerts`. |
 | `readiness_decision.recommendation` | string | "go" / "modify" / "skip" — baseline recommendation for pre-workout reports. |
 | `readiness_decision.priority`  | number   | 0 (safety stop), 1 (acute overload), 2 (accumulated fatigue), 3 (green light). |
 | `readiness_decision.signals`   | object   | Per-signal status objects (hrv, rhr, sleep, tsb, acwr, ri). Each has `status` (green/amber/red/unavailable) and raw values with deltas. |
