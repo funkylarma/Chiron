@@ -1,6 +1,6 @@
 # DEVELOP_E — Chiron Development Engine Specification v6
 
-> **Document status:** Working specification — not yet approved for build  
+> **Document status:** Active —   
 > **Supersedes:** Chiron Development Engine Specification v5  
 > **Key changes from v5:** Phase transition Method 2 (level threshold) strengthened with a Mastery-modulated minimum duration gate; Mastery tiers defined for use in phase transition logic; hard floor of 4 weeks retained regardless of Mastery to allow physiological re-expression in returning athletes
 >

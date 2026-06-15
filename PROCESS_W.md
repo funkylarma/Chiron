@@ -1,6 +1,6 @@
 # PROCESS_W - Workout Prescription Ontology - v2
 
-> **Document status:** Working draft - supersedes PROCESS_W v1  
+> **Document status:** Active - supersedes PROCESS_W v1  
 > **Supersedes:** PROCESS_W.md (v1, ladder/rung mechanic)  
 > **Key changes from v1:** Progression mechanic replaced entirely by the Chiron Development Engine (see `DEVELOP_E.md`); zone crosswalk to Development Engine branches formalised; handoff contract between Stimulus Engine and Workout Generator defined; Layer 4 (ladder/rungs/advancement tiers) removed; Layer 3 feedback vocabulary updated to Development Engine terminology; extensive vs intensive progression logic retained and mapped to branch-level prescription axis
 
