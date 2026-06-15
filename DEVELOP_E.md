@@ -3,6 +3,8 @@
 > **Document status:** Working specification — not yet approved for build  
 > **Supersedes:** Chiron Development Engine Specification v5  
 > **Key changes from v5:** Phase transition Method 2 (level threshold) strengthened with a Mastery-modulated minimum duration gate; Mastery tiers defined for use in phase transition logic; hard floor of 4 weeks retained regardless of Mastery to allow physiological re-expression in returning athletes
+>
+> **Staging deltas (intervals.mcp build, 2026-06-15):** reconciliations between this spec and the live implementation, to be folded into the canonical Chiron copy at flip time. (1) CTL/ATL/TSB are sourced from the wellness records via `fitness-fields.js`, not a `/fitness` endpoint — none exists in this project. (2) Workout push is treated as already-available (this MCP writes to intervals.icu in production), not deferred to a future v2. (3) The Development Tree and Athlete Phenotypes sections are deferred to a future app-interface version; the Mastery computation is retained because phase-transition logic depends on it. (4) Coggan w/kg tables (male and female) are sourced from the existing `src/reference/power-standards.js`, not the abbreviated inline table here.
 
 ---
 
@@ -80,7 +82,7 @@ The system connects to intervals.icu as its primary data source.
 
 **Training load**
 - ATL, CTL, TSB (intervals.icu native model)
-- Endpoint: `/api/v1/athlete/{id}/fitness`
+- Source: these fields live on the **wellness** records, not a separate resource. There is **no `/fitness` REST endpoint**. Resolve via this project's `fitness-fields.js` helpers (`getCTL` / `getATL` / `getTSB`), which read the canonical `ctl` / `atl` fields off the wellness record. Never call a `/fitness` path.
 
 **Activity history**
 - Individual workout data: power, HR, duration, TSS, IF
@@ -235,7 +237,7 @@ capability_score = (coggan_position_score / 7.0) * 100
 | 20 min | < 2.5 | 2.5-3.0 | 3.0-3.7 | 3.7-4.4 | 4.4-5.1 | 5.1-5.8 | > 5.8 |
 | 60 min | < 2.0 | 2.0-2.6 | 2.6-3.2 | 3.2-3.9 | 3.9-4.6 | 4.6-5.3 | > 5.3 |
 
-*Female normative data require a separate table. Collect from current Coggan sources prior to build.*
+*Note: the authoritative tables (male and female) already live in `src/reference/power-standards.js`. This inline table is illustrative only; the Capability Model reads from that module.*
 
 ### Capability Branches
 
@@ -540,7 +542,7 @@ Mastery represents long-term accumulated development.
 
 Answers: *How much development has this athlete built over time?*
 
-Mastery powers the Development Tree visualisation.
+Mastery is used internally for phase-transition modulation (via Mastery tiers, below). Its athlete-facing visualisation, the Development Tree, is **deferred** to a future app-interface version. The Mastery computation itself is **in scope** because phase-transition logic depends on it.
 
 ### Mastery Accumulation
 
@@ -572,9 +574,7 @@ Half-life of 60 months (5 years). Mastery is practically permanent for any athle
 
 ### Display
 
-Mastery is displayed exclusively through the Development Tree.
-
-It is not shown as a numerical score to the athlete.
+The athlete-facing Mastery visualisation (the Development Tree) is **deferred** to a future app-interface version. In the initial build, Mastery is an internal quantity: computed and persisted, consumed only by phase-transition logic (Mastery tiers). It is not surfaced as a numerical score.
 
 ### Mastery Tiers
 
@@ -602,7 +602,7 @@ Fatigue affects prescription intensity and workout selection.
 
 ### Global Fatigue (from intervals.icu)
 
-intervals.icu calculates ATL, CTL, and TSB natively. Pull these values directly from the fitness endpoint. Do not recalculate them.
+intervals.icu calculates ATL, CTL, and TSB natively. Pull these values from the **wellness** records (there is no `/fitness` endpoint) via `fitness-fields.js` (`getCTL` / `getATL` / `getTSB`). Do not recalculate them, and do not read `atlLoad` / `ctlLoad` in preference to the canonical `atl` / `ctl` fields.
 
 TSB is used as a global readiness modifier:
 
@@ -746,6 +746,8 @@ When a phase transition occurs:
 ---
 
 ## Development Tree
+
+> **DEFERRED — out of scope for the initial build.** The Development Tree is athlete-facing visualisation, and this MCP is a pure data layer with no UI. The engine will compute and persist Mastery points, but render nothing. This entire section (visual structure, milestone nodes, leaf density, phenotype shape, the tree data model) is retained as the design for a future app-interface version. Do not implement it in the initial build.
 
 ### Purpose
 
@@ -1021,6 +1023,8 @@ workout {
 
 ## Athlete Phenotypes
 
+> **DEFERRED — out of scope for the initial build** (athlete-facing, no UI). Retained as design for a future app-interface version. Phenotype is informational only and does not affect prescription.
+
 The shape of the Development Tree creates rider archetypes based on relative branch Mastery.
 
 Phenotypes are informational. They do not directly affect prescription.
@@ -1050,7 +1054,7 @@ The complete update sequence after every completed workout:
 8. **Update Confidence Model** per branch with the new data point
 9. **Update system-specific fatigue** per branch
 10. **Update Mastery** per branch
-11. **Update Development Tree** (branch properties, leaf density, phenotype)
+11. **Update Development Tree** (branch properties, leaf density, phenotype) — *deferred; not built in the initial scope (see Development Tree section)*
 12. **Prepare next prescription** via the Stimulus Engine
 
 ---
@@ -1079,9 +1083,9 @@ The following decisions are required before implementation begins.
 | # | Decision | Status | Outcome |
 |---|----------|--------|---------|
 | 1 | Sweet Spot branch model | Resolved | Cross-branch prescription methodology; no separate branch |
-| 2 | Coggan normative tables | Open | Gender-specific from launch recommended |
+| 2 | Coggan normative tables | Resolved | Already in the codebase: `src/reference/power-standards.js` carries **both** male and female w/kg tables (Allen & Coggan) with continuous 0–100 interpolation (`rateBand`). The Capability Model consumes this as the single source; do not duplicate the inline table |
 | 3 | W' estimation and Anaerobic stimulus model | Resolved | Two-phase hybrid model: p60 w/kg primary for all athletes; W' enrichment (40% weighting) unlocked when confidence ≥ 75% and 3+ qualifying intentional efforts exist |
-| 4 | Workout push to intervals.icu | Open | v2 recommended (v1 read-only) |
+| 4 | Workout push to intervals.icu | Resolved | Already implemented in this MCP (`create_workout` / `create_training_plan` / `progress_block`); the engine builds on it from the outset rather than deferring to v2 |
 | 5 | HRV in readiness formula | Open | v2 recommended |
 | 6 | Manual phase override duration | Open | Until next event entry recommended |
 
@@ -1094,7 +1098,7 @@ Version 1 must remain:
 - **Deterministic**: every credit, level, and prescription is derivable from the formula
 - **Explainable**: a coach must be able to audit any recommendation from raw inputs
 - **Conservative**: where data is insufficient, prescribe conservatively and gather data first
-- **Read-only**: intervals.icu integration is read-only in v1
+- **Write-capable**: unlike a greenfield v1, this MCP already pushes structured workouts and plans to intervals.icu in production (`create_workout`, `create_training_plan`, `progress_block`). The Development Engine targets the spec's "v2" workout-push capability from the outset rather than starting read-only. Reads remain the default; writes stay explicit and confirmed.
 
 Future versions may incorporate:
 
@@ -1102,7 +1106,6 @@ Future versions may incorporate:
 - Dynamic stimulus optimisation
 - Individual adaptation rate modelling
 - HRV integration in readiness
-- Workout push to intervals.icu
 - Population-level benchmarking
 - Event-specific progression trees
 - Recovery prediction modelling
@@ -1188,7 +1191,7 @@ The Mastery tier boundaries (0 / 500 / 1,500 / 3,500 points) are initial values 
 
 **Coggan normative tables**
 
-Male approximate w/kg norms are included in the spec. Female norms are not yet sourced and must be added before the system serves female athletes. Both tables must be implemented as configurable data structures, not hard-coded values, to allow recalibration.
+**Already solved in the codebase.** `src/reference/power-standards.js` carries both male and female w/kg tables (sourced from Allen & Coggan) and a continuous 0–100 interpolation function (`rateBand`) that matches this spec's Capability scoring (Steps 2–3). The Capability Model must consume that module as the single source of truth rather than the abbreviated inline table in this spec. The one gap is branch coverage: the existing bands are 5s / 1min / 5min / FTP (neuromuscular / anaerobic / VO2max / threshold). The **Aerobic Foundation** branch (p3600 w/kg plus EF/decoupling) needs adding to that table; the interpolation machinery is reused as-is.
 
 ### Relationship Summary
 
