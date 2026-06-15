@@ -1,4 +1,82 @@
-# Section 11 — AI Coach Protocol
+# SECTION_11.md — AI Coach Protocol
+
+> **Document status:** Active — Chiron fork of the Section 11 AI Coach Protocol  
+> **Protocol version:** 11.43  
+> **Last updated:** 2026-04-30  
+> **Upstream:** [Section 11 by CrankAddict](https://github.com/CrankAddict/section-11), MIT License  
+> **Fork changes from upstream:** Python sync layer (`sync.py`/`pull.py`) reframed to Node `src/sync/` and Cloudflare Worker cron; `DOSSIER.md` athlete-store reframed to live intervals.icu data via MCP; `dossier_declared`/`dossier_agreement` fields renamed `declared_phase`/`phase_agreement`; companion document references updated to `PROCESS_W_v2.md`
+
+---
+
+## Document Purpose
+
+This document defines how the Chiron AI coach interprets training data, assesses readiness, and validates recommendations. It is the authoritative source for all measurement, readiness, and load management logic in the system.
+
+This document does not define coaching voice, session structure, or progression targeting — those belong to the companion documents below.
+
+## Companion Documents
+
+| Document | Owns | Authority |
+|----------|------|-----------|
+| `CHIRON.md` | Coaching persona, voice, tool usage, communication style | Coaching behaviour |
+| `SECTION_11.md` (this file) | Data interpretation, readiness, load metrics, TID, durability, the sync layer | Measurement and readiness |
+| `DEVELOP_E.md` | Capability scoring, Athlete Levels, Mastery, the Development Tree, progression targeting, the Stimulus Engine | Athlete development and prescription targeting |
+| `PROCESS_W_v2.md` | Zone definitions, session structure, structural patterns, the Workout Generator | Prescription execution |
+
+**One rule resolves every boundary conflict:**
+> Measurement and readiness definitions follow Section 11. Prescription and progression definitions follow PROCESS_W_v2. Athlete development and targeting follow DEVELOP_E.
+
+**Priority rule:** Section 11's Readiness Decision (P0–P3) takes absolute precedence over all other prescription logic. If Section 11 returns `skip` or `modify`, that overrides any stimulus the Development Engine would otherwise prescribe.
+
+## Document Outline
+
+**11A — AI Coach Protocol**
+
+The core protocol for how the AI interprets data and makes decisions. Covers:
+
+- Data mirror architecture — `latest.json`, `history.json`, `intervals.json` and how to read them
+- Per-sport threshold schema — sport-family isolated FTP, LTHR, pace thresholds
+- Athlete profile and notes schemas
+- Display unit semantics — canonical metric fields vs display-converted narration fields
+- Readiness Decision (P0–P3 priority ladder) — the pre-computed go/modify/skip verdict
+- Phase detection — dual-stream architecture combining retrospective load history with prospective calendar
+- Zone distribution and TID — Seiler three-zone aggregates, Treff Polarization Index, drift detection
+- Capability metrics — durability, efficiency factor, HRRc, power curve delta, HR curve delta, sustainability profile, DFA a1
+- Load management — ACWR, monotony, strain, recovery index
+- Validated endurance ranges — the alarm and flag thresholds for each metric
+- Self-validation checklist — what the AI must verify before issuing any recommendation
+- Report templates — pre-workout, post-workout, weekly, block, and season report structures
+
+**11B — Output Format Guidelines**
+
+Report formatting rules, field reference, and assessment labels.
+
+**11C — Validation Metadata**
+
+Audit schema for tracking recommendation provenance and compliance.
+
+## Relationship to DEVELOP_E
+
+The Development Engine (`DEVELOP_E.md`) adds a new layer above this document's readiness infrastructure. Section 11 owns the signals; DEVELOP_E owns what to do with them from a progression standpoint.
+
+Specific handoffs:
+
+- Section 11's `readiness_decision` (P0–P3) gates DEVELOP_E's Stimulus Engine — a P0 or P1 verdict overrides any branch prescription regardless of Athlete Level or Confidence
+- Section 11's `phase_detection` informs DEVELOP_E's Periodisation Model phase transitions (Section 11 is the measurement layer; DEVELOP_E applies the transition logic)
+- Section 11's durability metrics (DI, aggregate durability) feed into DEVELOP_E's Aerobic Foundation branch assessment
+- Section 11's power curve delta and HR curve delta feed into DEVELOP_E's Capability Model updates
+
+## Zone Vocabulary Note
+
+This document uses **Seiler three-zone** aggregates (`Z1/Z2/Z3`) for TID and polarisation metrics. `PROCESS_W_v2.md` uses **granular Z1–Z7** (Coggan-style) for prescription. The symbols do not align — see the crosswalk in `PROCESS_W_v2.md`'s *Relationship to Section 11* section for the full mapping. When this document references zones, it always means the Seiler aggregates unless explicitly stated otherwise.
+
+---
+
+**Protocol Version:** 11.43
+**Last Updated:** 2026-04-30
+**License:** [MIT](https://opensource.org/licenses/MIT)
+
+> **Local adaptation (intervals-icu-mcp fork, 2026-06-12).** This is a project-local copy of Section 11, not the upstream document. Two reframes match it to this deployment: (1) the upstream Python sync (`sync.py`/`pull.py` and its `v3.x` version pins) is reframed onto this project's sync layer — Node `src/sync/` locally plus the Cloudflare Worker cron; (2) the `DOSSIER.md` athlete-store concept is reframed onto live intervals.icu (FTP/zones/LTHR/schedule) plus goals agreed with the athlete at the outset, the `dossier_declared`/`dossier_agreement` schema fields are renamed `declared_phase`/`phase_agreement`, and data-mirror access is reframed to this MCP server. Companion grounding doc: `PROCESS_W.md` (see its *Relationship to Section 11* for the ownership boundary). The upstream version history below is preserved as-is.
 
 **Protocol Version:** 11.43  
 **Last Updated:** 2026-04-30
