@@ -1,8 +1,8 @@
-# PROCESS_W - Workout Prescription Ontology - v2
+# PROCESS_W - Workout Prescription Ontology - v2.2
 
-> **Document status:** Active - supersedes PROCESS_W v1  
-> **Supersedes:** PROCESS_W.md (v1, ladder/rung mechanic)  
-> **Key changes from v1:** Progression mechanic replaced entirely by the Chiron Development Engine (see `DEVELOP_E.md`); zone crosswalk to Development Engine branches formalised; handoff contract between Stimulus Engine and Workout Generator defined; Layer 4 (ladder/rungs/advancement tiers) removed; Layer 3 feedback vocabulary updated to Development Engine terminology; extensive vs intensive progression logic retained and mapped to branch-level prescription axis
+> **Document status:** Current — implementation-verified against the live Development Engine as of 2026-06-16  
+> **Supersedes:** PROCESS_W.md v1.x (ladder/rung mechanic; preserved as `PROCESS_W_v1.md` for the surviving Layer 3 content that v2.0 had dropped and v2.1–v2.2 restored)  
+> **Key changes from v1:** Progression mechanic replaced entirely by the Chiron Development Engine (see `DEVELOP_E.md`); zone crosswalk to Development Engine branches formalised; handoff contract between Stimulus Engine and Workout Generator defined; Layer 4 (ladder/rungs/advancement tiers) removed; Layer 3 feedback vocabulary updated to Development Engine terminology; extensive vs intensive progression logic retained and mapped to branch-level prescription axis. v2.1–v2.2 restored and implemented RPE-vs-expected interpretation, interruption-cause handling, and cross-session maladaptation detection — each section below is now marked with its implementation status rather than left as spec-only.
 
 ---
 
@@ -629,6 +629,22 @@ RPE relative to expected difficulty is one of the richest signals the system has
 | Slightly higher (1 point above) | Session was hard but achievable | Normal; fatigue modelling notes elevated cost |
 | Much higher (2+ points above) | Overreach signal; athlete pushed beyond sustainable | Confidence decreases; next prescription shifts toward lower PPW; system-specific fatigue increases |
 
+**Implemented 2026-06-16.** `session-outcome.js`'s `rpeSignal()` implements this exact five-row table against `EXPECTED_RPE` (`develop-config.js`); `check_compliance(scope:'session')`'s optional `rpe` arg feeds it. The "much lower" row can promote a session to `above_target` (the engine's `exceeded` flag) even when the power ratio alone didn't cross the threshold; the "much higher" row produces `at_limit` — the level is still credited in full (this document's "Confidence decreases" is realised as the existing `provisional` confidence gloss rather than a separate fatigue penalty; there is no system-specific-fatigue write-back from RPE yet, only from `system-fatigue.js`'s stimulus-history model). The two middle rows ("slightly lower"/"slightly higher") are tracked as signals in the response but don't yet change engine behaviour beyond the note.
+
+### 3.3a Interruption Causes
+
+*Restored from the pre-engine ontology (`PROCESS_W_v1.md` §3.3 "Outcome 3") — a session that didn't complete needs a cause before it needs a verdict, and the five causes call for different responses, not one generic miss penalty.*
+
+| Cause | Level | Welfare flag | Response |
+|---|---|---|---|
+| Environmental | Held, untouched | No | Conditions made it impossible/unsafe. Reschedule — the athlete is unaffected. |
+| Mechanical | Held, untouched | No | Equipment failure. Reschedule — the athlete is unaffected. |
+| Nutritional | Held | No | Under/over-fuelling. Correctable — a fuelling conversation before the next quality session. |
+| Physical | Held, paused | **Yes** | Pain, injury, or illness. Takes priority over progression — no quality work until understood; escalate for direct follow-up. |
+| Mental | Held | No | Motivation or life load. A coaching conversation, not a data problem — lower the barrier next time, or a genuine load/life-load check-in if persistent. |
+
+**Implemented 2026-06-16.** `session-outcome.js`'s `interruptionResponse(cause)` returns this table; `check_compliance(scope:'session')`'s optional `interruption_cause` arg (`INTERRUPTION_CAUSES` in `develop-config.js`) skips power-based grading entirely and returns the cause's note + flag instead. All five hold the level — the differentiator is the coaching note, not the ladder.
+
 ### 3.4 Maladaptation Signals
 
 The system monitors for patterns that indicate the prescription is not producing the intended adaptation.
@@ -640,6 +656,10 @@ The system monitors for patterns that indicate the prescription is not producing
 **Power:HR ratio declining** — for a given power output, HR is trending higher over a block of sessions. Indicates accumulated fatigue or early overreaching. The system flags this for Section 11's readiness layer to incorporate.
 
 **No Exceptional completions in six or more sessions at the same level** — suggests the athlete is comfortably maintaining but not progressing. The Development Engine may need to shift toward the upper PPW or consider whether the branch normalisation tables need recalibration.
+
+**Implemented 2026-06-16 (Phase 2), three of the four signals.** `engine-state.json` already kept a per-session `session_log` (date, branch, credits, level before/after, outcome) for audit purposes — Phase 2 added `rpe_signal` to each logged entry and `session-outcome.js`'s `detectMaladaptation(branch, sessionLog)` scans it for: **consistent partial completion** (3+ partial/abandoned sessions in the last 6) and **RPE consistently above expected** (3+ sessions with an above-band RPE signal in the last 6) — both classified as `overreach_stagnation`; and **no Exceptional in 6+ sessions at a static level with neither fatigue signal present** — classified as `habituation_stagnation`. Per the diagnostic question this section poses ("is the athlete too tired to adapt, or too comfortable to adapt?"), overreach signals take priority when both patterns are present. Surfaced as `maladaptation` in `check_compliance` — session scope (for the branch just graded) and block scope (for the focus branch, when the block is stalling).
+
+**`Power:HR ratio declining` is NOT implemented.** No HR data is plumbed through `stimulus-extract.js` — this signal would need that wired through first, and is deliberately not faked from data that isn't there.
 
 ---
 
@@ -667,5 +687,7 @@ This section provides the explicit crosswalk between terminology used in this do
 
 | Version | Key changes |
 |---------|------------|
+| v2.2 | §3.4 Maladaptation Signals marked implemented for three of its four signals (`detectMaladaptation()`, surfaced via `check_compliance` session + block scope); `Power:HR ratio declining` marked explicitly not implemented (no HR data plumbed). |
+| v2.1 | §3.3 RPE Signal Interpretation marked implemented (`session-outcome.js`, `check_compliance`'s `rpe` arg). New §3.3a Interruption Causes restored from the pre-engine ontology and marked implemented (`interruption_cause` arg). |
 | v2.0 | Full rewrite. Ladder/rung mechanic (Layer 4) removed. Development Engine progression model adopted. Prescription handoff contract added. Branch-to-zone crosswalk formalised. Sweet Spot repositioned as prescription methodology. Completion assessment vocabulary aligned to Development Engine. |
-| v1.x | Original PROCESS_W. Ladder and rung-based progression mechanic. Superseded by this document. |
+| v1.x | Original PROCESS_W. Ladder and rung-based progression mechanic. Superseded by this document; restored as `PROCESS_W_v1.md` 2026-06-16 as the source for the surviving Layer 3 content above. |
