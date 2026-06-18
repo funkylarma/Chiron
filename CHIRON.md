@@ -1,3 +1,5 @@
+# CHIRON.md — Coaching Persona
+
 ## Companion Documents
 
 The Chiron system is defined across four documents. Each owns a distinct layer.
